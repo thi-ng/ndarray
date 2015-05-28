@@ -63,14 +63,30 @@
     [dim psyms shapes err & body]
     `(if (and
           ~@(mapcat
-             #(list (list '>= (symbol (psyms %)) 0)
-                    (list '<  (symbol (psyms %)) (symbol (shapes %))))
+             #(list `(>= ~(symbol (psyms %)) 0)
+                    `(< ~(symbol (psyms %)) ~(symbol (shapes %))))
              (range dim)))
        (do ~@body)
        (throw (new ~err (str "Invalid index: " (pr-str [~@psyms]))))))
 
+  (defn- inject-clj-protos
+    [clj? ->a ->sh idx rdim]
+    (if clj?
+      (list
+       'clojure.lang.Seqable
+       `(~'seq
+         [_#]
+         (for [~@(mapcat #(vector (->a %) `(range ~(->sh %))) rdim)]
+           (~'_get ~'_data ~idx))))
+      (list
+       'ISeqable
+       `(~'-seq
+         [_#]
+         (for [~@(mapcat #(vector (->a %) `(range ~(->sh %))) rdim)]
+           (~'_get ~'_data ~idx))))))
+
   (defmacro def-ndarray
-    [dim err]
+    [dim err & [clj?]]
     (let [type-name (symbol (str "NDArray" dim))
           raw-name  (symbol (str "make-raw-ndarray" dim))
           strides   (make-symbols "_stride" dim)
@@ -85,13 +101,10 @@
           rdim      (range dim)]
       `(do
          (deftype ~type-name [~'_get ~'_set ~'_data ~'_offset ~@strides ~@shapes]
+           ~@(inject-clj-protos clj? ->a ->sh (make-indexer-syms dim strides asyms) rdim)
            ~'PNDArray
            (~'data
              [_#] ~'_data)
-           (~'data-seq
-             [_#]
-             (for [~@(mapcat #(vector (->a %) (list 'range (->sh %))) rdim)]
-               (~'get-at-unsafe _# [~@asyms])))
            (~'dimension
              [_#] ~dim)
            (~'stride
@@ -105,13 +118,13 @@
            (~'get-at
              [_# [~@psyms]]
              ~(with-bounds-check dim psyms shapes err
-                (list '_get '_data idx-syms)))
+                `(~'_get ~'_data ~idx-syms)))
            (~'get-at-unsafe
              [_# ~p] (~'_get ~'_data ~idx))
            (~'set-at
              [_# [~@psyms] ~c]
              ~(with-bounds-check dim psyms shapes err
-                (list '_set '_data ('int idx-syms) c))
+                `(~'_set ~'_data (int ~idx-syms) ~c))
              _#)
            (~'set-at-unsafe
              [_# ~p v#] (~'_set ~'_data (int ~idx) v#) _#)
@@ -119,25 +132,23 @@
              [_# [~@psyms]]
              (new ~type-name ~'_get ~'_set ~'_data ~'_offset ~@strides
                   ~@(map
-                     #(list 'if (list 'neg? (->p %))
-                            (->sh %)
-                            (->p %))
+                     #(list 'if `(neg? ~(->p %)) (->sh %) (->p %))
                      rdim)))
            (~'lo
              [_# [~@psyms]]
              (let [~@(mapcat
                       #(list
                         [(->a %) (->b %)]
-                        (list 'if (list 'pos? (->p %))
-                              [(list '- (->sh %) (->p %))
-                               (list '* (->st %) (->p %))]
-                              [(->sh %) 0]))
+                        `(if (pos? ~(->p %))
+                           [(- ~(->sh %) ~(->p %))
+                            (* ~(->st %) ~(->p %))]
+                           [~(->sh %) 0]))
                       rdim)
-                   ~o (+ ~@(->> rdim (map #(->b %)) (concat ['_offset]) (pair-fn '+)))]
+                   ~o (+ ~@(->> rdim (map ->b) (cons '_offset) (pair-fn '+)))]
                (new ~type-name ~'_get ~'_set ~'_data ~o ~@strides ~@asyms)))
            (~'transpose
              [_# [~@psyms]]
-             (let [~@(mapcat #(list (->p %) (list 'if (->p %) (->p %) %)) rdim)
+             (let [~@(mapcat #(list (->p %) `(if ~(->p %) ~(->p %) ~%)) rdim)
                    ~c [~@strides]
                    ~d [~@shapes]]
                (new ~type-name ~'_get ~'_set ~'_data ~'_offset
@@ -147,18 +158,18 @@
              [_# [~@psyms]]
              (let [~o ~'_offset
                    ~@(mapcat
-                      #(let [stride' (list '* (->st %) (->p %))]
+                      #(let [stride' `(* ~(->st %) ~(->p %))]
                          (list
                           [(->a %) (->b %) o]
-                          (list 'if (list 'number? (->p %))
-                                (list 'if (list 'neg? (->p %))
-                                      [(list 'Math/ceil (list '/ (list '- (->sh %)) (->p %)))
-                                       stride'
-                                       (list '+ o (list '* (->st %) (list 'dec (->sh %))))]
-                                      [(list 'Math/ceil (list '/ (->sh %) (->p %)))
-                                       stride'
-                                       o])
-                                [(->sh %) (->st %) o])))
+                          `(if (number? ~(->p %))
+                             (if (neg? ~(->p %))
+                               [(Math/ceil (/ (- ~(->sh %)) ~(->p %)))
+                                ~stride'
+                                (+ ~o (* ~(->st %) (dec ~(->sh %))))]
+                               [(Math/ceil (/ ~(->sh %) ~(->p %)))
+                                ~stride'
+                                ~o])
+                             [~(->sh %) ~(->st %) ~o])))
                       rdim)]
                (new ~type-name ~'_get ~'_set ~'_data ~o ~@bsyms ~@asyms)))
            (~'pick
@@ -167,11 +178,10 @@
                    ~@(mapcat
                       #(list
                         [c d o]
-                        (list 'if (list 'and (list 'number? (->p %)) (list '>= (->p %) 0))
-                              [c d (list '+ o (list '* (->st %) (->p %)))]
-                              [(list 'conj c (->sh %)) (list 'conj d (->st %)) o]))
-                      rdim)
-                   ]
+                        `(if (and (number? ~(->p %)) (>= ~(->p %) 0))
+                           [~c ~d (+ ~o (* ~(->st %) ~(->p %)))]
+                           [(conj ~c ~(->sh %)) (conj ~d ~(->st %)) ~o]))
+                      rdim)]
                ((@~'ctor-registry (count ~c)) ~'_get ~'_set ~'_data ~o ~d ~c)))
            ~'Object
            (~'toString
@@ -192,10 +202,10 @@
 #+BEGIN_SRC clojure :noweb-ref ctors
   (def ctor-registry (atom {}))
 
-  (def-ndarray 1 #?(:clj IndexOutOfBoundsException :cljs js/Error))
-  (def-ndarray 2 #?(:clj IndexOutOfBoundsException :cljs js/Error))
-  (def-ndarray 3 #?(:clj IndexOutOfBoundsException :cljs js/Error))
-  (def-ndarray 4 #?(:clj IndexOutOfBoundsException :cljs js/Error))
+  (def-ndarray 1 #?(:clj IndexOutOfBoundsException :cljs js/Error) #?(:clj true))
+  (def-ndarray 2 #?(:clj IndexOutOfBoundsException :cljs js/Error) #?(:clj true))
+  (def-ndarray 3 #?(:clj IndexOutOfBoundsException :cljs js/Error) #?(:clj true))
+  (def-ndarray 4 #?(:clj IndexOutOfBoundsException :cljs js/Error) #?(:clj true))
 
   (defmulti ndarray
     (fn [data shape]

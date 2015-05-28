@@ -197,10 +197,33 @@
   (def-ndarray 3 #?(:clj IndexOutOfBoundsException :cljs js/Error))
   (def-ndarray 4 #?(:clj IndexOutOfBoundsException :cljs js/Error))
 
-  (defn nd-array
+  (defmulti ndarray
+    (fn [data shape]
+      #?(:clj
+         (let [^Class c (class data)]
+           (if (.startsWith (.getName c) "[")
+             :array
+             (if (or (sequential? data) (string? data))
+               :to-array
+               c)))
+         :cljs
+         (if (a/array-type data)
+           :array
+           (if (or (sequential? data) (string? data))
+             :to-array)))))
+
+  (defmethod ndarray :default
+    [data _]
+    (throw (new #?(:clj IllegalArgumentException :cljs js/Error)
+                (str "Can't create ndarray from: " data))))
+
+  (defmethod ndarray :to-array
     [data shape]
-    (let [stride (shape->stride shape)]
-      ((@ctor-registry (count shape)) aget aset data 0 stride shape)))
+    ((@ctor-registry (count shape)) aget aget (to-array data) 0 (shape->stride shape) shape))
+
+  (defmethod ndarray :array
+    [data shape]
+    ((@ctor-registry (count shape)) aget aset data 0 (shape->stride shape) shape))
 #+END_SRC
 
 ** Helper functions

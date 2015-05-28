@@ -1,0 +1,214 @@
+#+SETUPFILE: ./setup.org
+#+TITLE: thi.ng/ndarray
+#+AUTHOR: Karsten Schmidt
+#+EMAIL: k@thi.ng
+
+* Contents                                                         :toc_3_gh:
+ - [[#about-the-project][About the project]]
+     - [[#description][Description]]
+ - [[#namespaces][Namespaces]]
+ - [[#tests][Tests]]
+ - [[#project-definition][Project definition]]
+     - [[#injected-properties][Injected properties]]
+     - [[#dependencies][Dependencies]]
+         - [[#runtime][Runtime]]
+         - [[#development][Development]]
+     - [[#leiningen-coordinates][Leiningen coordinates]]
+     - [[#building-this-project][Building this project]]
+         - [[#testing][Testing]]
+     - [[#leiningen-project-file][Leiningen project file]]
+     - [[#clojurescript-html-harness][ClojureScript HTML harness]]
+     - [[#accessing-library-version-during-runtime][Accessing library version during runtime]]
+         - [[#version-namespace][Version namespace]]
+     - [[#release-history][Release history]]
+     - [[#contributors][Contributors]]
+     - [[#license][License]]
+
+* About the project
+
+** Description
+
+This library is a Clojure/Clojurescript port of Mikola Lysenko's
+ndarray core JS library with extended features, which make more sense
+in a Clojure context.
+
+* Namespaces
+
+- [[./core.org][thi.ng.ndarray.core]]
+
+* Tests
+
+- [[../test/core.org][thi.ng.ndarray.test.core]]
+
+* Project definition
+
+** Injected properties                                             :noexport:
+
+#+BEGIN_SRC clojure :noweb-ref version
+0.1.0-SNAPSHOT
+#+END_SRC
+#+BEGIN_SRC clojure :exports none :noweb-ref project-url
+http://thi.ng/ndarray
+#+END_SRC
+#+BEGIN_SRC clojure :exports none :noweb yes :noweb-ref cljs-artefact-path
+target/ndarray-<<version>>.js
+#+END_SRC
+
+** Dependencies
+*** Runtime
+**** [[https://github.com/clojure/clojure][Clojure]]
+#+BEGIN_SRC clojure :noweb-ref dep-clj
+[org.clojure/clojure "1.7.0-beta3"]
+#+END_SRC
+**** [[https://github.com/clojure/clojurescript][ClojureScript]]
+#+BEGIN_SRC clojure :noweb-ref dep-cljs
+[org.clojure/clojurescript "0.0-3291"]
+#+END_SRC
+**** [[http://thi.ng/typedarrays][thi.ng/typedarrays]]
+#+BEGIN_SRC clojure :noweb-ref dep-arrays
+[thi.ng/typedarrays "0.1.0"]
+#+END_SRC
+*** Development
+**** [[https://github.com/cemerick/clojurescript.test][clojurescript.test]]
+#+BEGIN_SRC clojure :noweb-ref dep-cljs-test
+[com.cemerick/clojurescript.test "0.3.3"]
+#+END_SRC
+**** [[https://github.com/emezeske/lein-cljsbuild][Cljsbuild]]
+#+BEGIN_SRC clojure :noweb-ref dep-cljsbuild
+[lein-cljsbuild "1.0.6"]
+#+END_SRC
+
+** Leiningen coordinates
+
+#+BEGIN_SRC clojure :noweb yes :noweb-ref lein-coords
+  [thi.ng/ndarray "0.1.0-SNAPSHOT"]
+#+END_SRC
+
+** Building this project
+
+This project is written in a literate programming format and requires
+[[https://www.gnu.org/software/emacs/][Emacs]] & [[http://orgmode.org][Org-mode]] to generate usable source code. Assuming both tools
+are installed, the easiest way to generate a working project is via
+command line (make sure =emacs= is on your path or else edit its path
+in =tangle.sh=):
+
+#+BEGIN_SRC bash
+  git clone https://github.com/thi.ng/ndarray.git
+  cd ndarray
+  ./tangle.sh src/*.org test/*.org
+#+END_SRC
+
+Tangling is the process of extracting & combining source blocks from
+=.org= files into an actual working project/source tree. Once tangling
+is complete, you can =cd= into the generated project directory
+(=babel=) and then use =lein= as usual.
+
+*** Testing
+
+The =project.clj= file defines an alias to trigger a complete build &
+tests. Since PhantomJS (the usual test runner for other thi.ng
+projects) doesn't support typed arrays, the =cleantest= command will
+run the tests in your default browser. Test results are displayed in
+the dev console.
+
+#+BEGIN_SRC bash
+  cd babel
+  lein cleantest
+#+END_SRC
+
+Tangling this file will also generate a small HTML harness for the
+resulting JS file and will be placed in the main folder
+(=babel/index.html=), allowing for further experimentation in the
+browser.
+
+** Leiningen project file                                          :noexport:
+
+#+BEGIN_SRC clojure :tangle ../babel/project.clj :noweb yes :mkdirp yes :padline no
+  (defproject thi.ng/ndarray "<<version>>"
+    :description  "ndarray for Clojure/Clojurescript"
+    :url          "<<project-url>>"
+    :license      {:name "Apache Software License 2.0"
+                   :url "http://www.apache.org/licenses/LICENSE-2.0"
+                   :distribution :repo}
+    :scm          {:name "git"
+                   :url "git@github.com:thi-ng/ndarray.git"}
+
+    :min-lein-vesion "2.4.0"
+
+    :dependencies [<<dep-clj>>
+                   <<dep-cljs>>
+                   <<dep-arrays>>]
+
+    :profiles     {:dev {:plugins [<<dep-cljsbuild>>
+                                   <<dep-cljs-test>>]
+                         :global-vars {*warn-on-reflection* true}
+                         :jvm-opts ^:replace []
+                         :aliases {"cleantest" ["do" "clean," "test," "cljsbuild" "test"]}}}
+
+    :cljsbuild    {:builds [{:id "simple"
+                             :source-paths ["src" "test"]
+                             :compiler {:output-to "<<cljs-artefact-path>>"
+                                        :optimizations :whitespace
+                                        :pretty-print true}}]
+                   :test-commands {"unit-tests" ["open" :runner "index.html"]}}
+
+    :pom-addition [:developers [:developer
+                                [:name "Karsten Schmidt"]
+                                [:url "http://postspectacular.com"]
+                                [:timezone "0"]]])
+#+END_SRC
+
+** ClojureScript HTML harness                                      :noexport:
+
+#+BEGIN_SRC html :tangle ../babel/index.html :noweb yes :mkdirp yes :padline no
+  <!DOCTYPE html>
+  <html lang="en">
+    <head>
+      <title><<lein-coords>> test</title>
+    </head>
+    <body>
+      <script type="text/javascript" src="<<cljs-artefact-path>>"></script>
+    </body>
+  </html>
+#+END_SRC
+
+** Accessing library version during runtime
+
+The autogenerated namespace =thi.ng.ndarray.version= contains a single
+symbol =version= holding the version string defined above:
+
+#+BEGIN_SRC clojure :noweb yes
+  (use '[thi.ng.ndarray.version])
+  
+  (prn version)
+  ; "<<version>>"
+#+END_SRC
+
+*** Version namespace                                              :noexport:
+
+#+BEGIN_SRC clojure :tangle ../babel/src/thi/ng/ndarray/version.cljc :noweb yes :mkdirp yes :padline no :exports none
+  (ns thi.ng.ndarray.version)
+
+  (def version "<<version>>")
+#+END_SRC
+
+** Release history
+
+| *Version* | *Released* | *Description*        | *Lein coordinates*         | *Tagged Github URL* |
+|-----------+------------+----------------------+----------------------------+---------------------|
+|     0.1.0 | 2015-05-26 | initial test release | =[thi.ng/ndarray "0.1.0"]= | [[https://github.com/thi-ng/typedarrays/tree/0.1.0][0.1.0]]               |
+
+** Contributors
+
+| *Name*          | *Role*                          | *Website*                  |
+|-----------------+---------------------------------+----------------------------|
+| [[k@thi.ng][Karsten Schmidt]] | initiator & principal developer | http://postspectacular.com |
+
+I've got a fairly detailed roadmap and task list to implement over the
+coming months, but am always happy to receive feedback & suggestions
+and have issues filed. Once the core engine is more refined I'll be
+gladly welcoming other contributions. Thanks for understanding!
+
+** License
+
+This project is open source and licensed under the [[http://www.apache.org/licenses/LICENSE-2.0][Apache Software License 2.0]].

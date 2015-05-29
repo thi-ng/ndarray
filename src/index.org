@@ -77,6 +77,10 @@ target/ndarray-<<version>>.js
 #+BEGIN_SRC clojure :noweb-ref dep-cljsbuild
 [lein-cljsbuild "1.0.6"]
 #+END_SRC
+**** [[https://github.com/weavejester/lein-auto][lein-auto]]
+#+BEGIN_SRC clojure :noweb-ref dep-autotest
+[lein-auto "0.1.2"]
+#+END_SRC
 
 ** Leiningen coordinates
 
@@ -139,11 +143,15 @@ browser.
                    <<dep-cljs>>
                    <<dep-arrays>>]
 
+    :plugins      [<<dep-autotest>>]
+
     :profiles     {:dev {:plugins [<<dep-cljsbuild>>
                                    <<dep-cljs-test>>]
                          :global-vars {*warn-on-reflection* true}
                          :jvm-opts ^:replace []
                          :aliases {"cleantest" ["do" "clean," "test," "cljsbuild" "test"]}}}
+
+    :auto         {:default {:file-pattern #"\.(clj|cljs|cljc)$"}}
 
     :cljsbuild    {:builds [{:id "simple"
                              :source-paths ["src" "test"]

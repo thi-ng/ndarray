@@ -1,0 +1,50 @@
+#+SETUPFILE: ../src/setup.org
+
+* Contents                                                         :toc_4_gh:
+ - [[#thingndarraytestcore][thi.ng.ndarray.test.core]]
+     - [[#main-tests][Main tests]]
+     - [[#complete-namespace-definition][Complete namespace definition]]
+
+* thi.ng.ndarray.test.core
+
+** Main tests
+
+#+BEGIN_SRC clojure :noweb-ref test
+  (deftest test-3d
+    (let [shape [3 3 3]
+          raw   (range (apply * shape))
+          a     (nd/ndarray #?(:clj :bytes :cljs :int8) raw shape)]
+      (is (satisfies? nd/PNDArray a))
+      #?(:cljs (is (a/typed-array? (nd/data a))))
+      (is (= shape (nd/shape a)))
+      (is (= [9 3 1] (nd/stride a)))
+      (is (= raw (seq a)))
+      (is (= [2 2 2] (-> a (nd/hi [2 2 2]) (nd/shape))))
+      (is (= [0 1 3 4 9 10 12 13] (-> a (nd/hi [2 2 2]) (seq))))
+      (is (= [2 2 2] (-> a (nd/lo [1 1 1]) (nd/shape))))
+      (is (= [13 14 16 17 22 23 25 26] (-> a (nd/lo [1 1 1]) (seq))))
+      (is (= [13] (-> a (nd/hi [2 2 2]) (nd/lo [1 1 1]) (seq))))
+      ))
+#+END_SRC
+
+** Complete namespace definition
+
+#+BEGIN_SRC clojure :tangle ../babel/test/thi/ng/ndarray/test/core.cljc :noweb yes :mkdirp yes :padline no
+  (ns thi.ng.ndarray.test.core
+    (:require
+     [thi.ng.ndarray.core :as nd]
+     #?@(:clj
+         [[clojure.test :refer :all]]
+         :cljs
+         [[thi.ng.typedarrays.core :as a]
+          [cemerick.cljs.test :as t :refer-macros [is deftest]]])))
+
+  #?(:cljs (enable-console-print!))
+
+  <<test>>
+
+  #?(:cljs
+     (if (a/typed-arrays-supported?)
+       (t/run-all-tests)
+       (prn "Can't test - typed arrays not supported!")))
+#+END_SRC

@@ -15,12 +15,13 @@
 #+BEGIN_SRC clojure :noweb-ref api
   (defprotocol PNDArray
     (data [_])
-    (data-seq [_])
+    (data-type [_])
     (dimension [_])
     (shape [_])
     (stride [_])
     (offset [_])
     (index-at [_ p])
+    (index-pos [_ i])
     (get-at [_ p])
     (get-at-unsafe [_ p])
     (set-at [_ p v])
@@ -46,49 +47,54 @@
       (if (> (count coll) 2) (recur f coll) coll)))
 
   (defn- make-indexer
-    [dim strides p]
+    [dim ->st p]
     `(+ ~@(->> (range dim)
-               (map #(list '* (symbol (strides %)) (list p %)))
+               (map #(list '* (->st %) `(int (~p ~%))))
                (concat ['_offset])
                (pair-fn '+))))
 
   (defn- make-indexer-syms
-    [dim strides psyms]
+    [dim ->st ->p]
     `(+ ~@(->> (range dim)
-               (map #(list '* (symbol (strides %)) (symbol (psyms %))))
+               (map #(list '* (->st %) (->p %)))
                (concat ['_offset])
                (pair-fn '+))))
 
   (defn- with-bounds-check
-    [dim psyms shapes err & body]
+    [dim psyms shapes clj? & body]
     `(if (and
           ~@(mapcat
              #(list `(>= ~(symbol (psyms %)) 0)
                     `(< ~(symbol (psyms %)) ~(symbol (shapes %))))
              (range dim)))
        (do ~@body)
-       (throw (new ~err (str "Invalid index: " (pr-str [~@psyms]))))))
+       (throw
+        (new ~(if clj? 'IndexOutOfBoundsException 'js/Error)
+             (str "Invalid index: " (pr-str [~@psyms]))))))
 
   (defn- inject-clj-protos
-    [clj? ->a ->sh idx rdim]
+    [clj? get ->a ->sh idx rdim]
     (if clj?
       (list
        'clojure.lang.Seqable
        `(~'seq
          [_#]
          (for [~@(mapcat #(vector (->a %) `(range ~(->sh %))) rdim)]
-           (~'_get ~'_data ~idx))))
+           (~get ~'_data ~idx))))
       (list
        'ISeqable
        `(~'-seq
          [_#]
          (for [~@(mapcat #(vector (->a %) `(range ~(->sh %))) rdim)]
-           (~'_get ~'_data ~idx))))))
+           (~get ~'_data ~idx))))))
+
+  (defn type-hinted
+    [cast type x] (if cast (with-meta x {:tag (name type)}) x))
 
   (defmacro def-ndarray
-    [dim err & [clj?]]
-    (let [type-name (symbol (str "NDArray" dim))
-          raw-name  (symbol (str "make-raw-ndarray" dim))
+    [dim cast type-hint data-ctor get set & [clj?]]
+    (let [type-name (symbol (str "NDArray" dim (name type-hint)))
+          raw-name  (symbol (str "make-raw-ndarray" dim "-" (name type-hint)))
           strides   (make-symbols "_stride" dim)
           shapes    (make-symbols "_shape" dim)
           asyms     (make-symbols "a" dim)
@@ -96,15 +102,19 @@
           psyms     (make-symbols "p" dim)
           [->st ->sh ->a ->b ->p] (map #(comp symbol %) [strides shapes asyms bsyms psyms])
           [c d p o] (repeatedly gensym)
-          idx       (make-indexer dim strides p)
-          idx-syms  (make-indexer-syms dim strides psyms)
+          idx       (make-indexer dim ->st p)
+          idx-syms  (make-indexer-syms dim ->st ->p)
           rdim      (range dim)]
       `(do
-         (deftype ~type-name [~'_get ~'_set ~'_data ~'_offset ~@strides ~@shapes]
-           ~@(inject-clj-protos clj? ->a ->sh (make-indexer-syms dim strides asyms) rdim)
+         (deftype ~type-name
+             [~(if cast (with-meta '_data {:tag (name type-hint)}) '_data)
+              ~'_offset ~@strides ~@shapes]
+           ~@(inject-clj-protos clj? get ->a ->sh (make-indexer-syms dim ->st ->a) rdim)
            ~'PNDArray
            (~'data
              [_#] ~'_data)
+           (~'data-type
+             [_#] ~type-hint)
            (~'dimension
              [_#] ~dim)
            (~'stride
@@ -115,24 +125,34 @@
              [_#] ~'_offset)
            (~'index-at
              [_# ~p] ~idx)
+           (~'index-pos
+             [_# ~p]
+             (let [~p (int ~p)
+                   ~c (- ~p ~'_offset)
+                   ~@(mapcat
+                      #(list
+                        (->a %) `(int (/ ~c ~(->st %)))
+                        c `(- ~c (* ~(->a %) ~(->st %))))
+                      rdim)]
+               [~@asyms]))
            (~'get-at
              [_# [~@psyms]]
-             ~(with-bounds-check dim psyms shapes err
-                `(~'_get ~'_data ~idx-syms)))
+             ~(with-bounds-check dim psyms shapes clj?
+                `(~get ~(type-hinted cast type-hint '_data) (int ~idx-syms))))
            (~'get-at-unsafe
-             [_# ~p] (~'_get ~'_data ~idx))
+             [_# ~p] (~get ~(type-hinted cast type-hint '_data) (int ~idx)))
            (~'set-at
              [_# [~@psyms] ~c]
-             ~(with-bounds-check dim psyms shapes err
-                `(~'_set ~'_data (int ~idx-syms) ~c))
+             ~(with-bounds-check dim psyms shapes clj?
+                `(~set ~(type-hinted cast type-hint '_data) (int ~idx-syms) ~(if cast `(~cast ~c) c)))
              _#)
            (~'set-at-unsafe
-             [_# ~p v#] (~'_set ~'_data (int ~idx) v#) _#)
+             [_# ~p ~c] (~set ~(type-hinted cast type-hint '_data) (int ~idx) ~(if cast `(~cast ~c) c)) _#)
            (~'hi
              [_# [~@psyms]]
-             (new ~type-name ~'_get ~'_set ~'_data ~'_offset ~@strides
+             (new ~type-name ~'_data ~'_offset ~@strides
                   ~@(map
-                     #(list 'if `(neg? ~(->p %)) (->sh %) (->p %))
+                     #(list 'if `(neg? ~(->p %)) (->sh %) `(int ~(->p %)))
                      rdim)))
            (~'lo
              [_# [~@psyms]]
@@ -140,38 +160,38 @@
                       #(list
                         [(->a %) (->b %)]
                         `(if (pos? ~(->p %))
-                           [(- ~(->sh %) ~(->p %))
-                            (* ~(->st %) ~(->p %))]
+                           [(- ~(->sh %) (int ~(->p %)))
+                            (* ~(->st %) (int ~(->p %)))]
                            [~(->sh %) 0]))
                       rdim)
                    ~o (+ ~@(->> rdim (map ->b) (cons '_offset) (pair-fn '+)))]
-               (new ~type-name ~'_get ~'_set ~'_data ~o ~@strides ~@asyms)))
+               (new ~type-name ~'_data ~o ~@strides ~@asyms)))
            (~'transpose
              [_# [~@psyms]]
-             (let [~@(mapcat #(list (->p %) `(if ~(->p %) ~(->p %) ~%)) rdim)
+             (let [~@(mapcat #(list (->p %) `(if ~(->p %) (int ~(->p %)) ~%)) rdim)
                    ~c [~@strides]
                    ~d [~@shapes]]
-               (new ~type-name ~'_get ~'_set ~'_data ~'_offset
+               (new ~type-name ~'_data ~'_offset
                     ~@(map #(list c (->p %)) rdim)
                     ~@(map #(list d (->p %)) rdim))))
            (~'step
              [_# [~@psyms]]
              (let [~o ~'_offset
                    ~@(mapcat
-                      #(let [stride' `(* ~(->st %) ~(->p %))]
+                      #(let [stride' `(* ~(->st %) (int ~(->p %)))]
                          (list
                           [(->a %) (->b %) o]
                           `(if (number? ~(->p %))
                              (if (neg? ~(->p %))
-                               [(Math/ceil (/ (- ~(->sh %)) ~(->p %)))
+                               [~(list 'int (list 'Math/ceil `(/ (- ~(->sh %)) (int ~(->p %)))))
                                 ~stride'
                                 (+ ~o (* ~(->st %) (dec ~(->sh %))))]
-                               [(Math/ceil (/ ~(->sh %) ~(->p %)))
+                               [~(list 'int (list 'Math/ceil `(/ ~(->sh %) (int ~(->p %)))))
                                 ~stride'
                                 ~o])
                              [~(->sh %) ~(->st %) ~o])))
                       rdim)]
-               (new ~type-name ~'_get ~'_set ~'_data ~o ~@bsyms ~@asyms)))
+               (new ~type-name ~'_data ~o ~@bsyms ~@asyms)))
            (~'pick
              [_# [~@psyms]]
              (let [~o ~'_offset, ~c [], ~d []
@@ -179,22 +199,32 @@
                       #(list
                         [c d o]
                         `(if (and (number? ~(->p %)) (>= ~(->p %) 0))
-                           [~c ~d (+ ~o (* ~(->st %) ~(->p %)))]
+                           [~c ~d (+ ~o (* ~(->st %) (int ~(->p %))))]
                            [(conj ~c ~(->sh %)) (conj ~d ~(->st %)) ~o]))
-                      rdim)]
-               ((@~'ctor-registry (count ~c)) ~'_get ~'_set ~'_data ~o ~d ~c)))
+                      rdim)
+                   cnt# (count ~c)]
+               (if (pos? cnt#)
+                 ((get-in @~'ctor-registry [cnt# ~type-hint :ctor]) ~'_data ~o ~d ~c)
+                 (~get ~(type-hinted cast type-hint '_data) ~o))))
            ~'Object
            (~'toString
              [_#]
              (pr-str
-              {:data ~'_data :length (* ~@shapes) :offset ~'_offset
+              {:data ~'_data :type ~type-hint
+               :size (* ~@shapes) :total (count ~'_data) :offset ~'_offset
                :shape [~@shapes] :stride [~@strides]})))
 
          (defn ~(with-meta raw-name {:export true})
-           [get# set# data# o# [~@strides] [~@shapes]]
-           (new ~type-name get# set# data# o# ~@strides ~@shapes))
+           [data# o# [~@strides] [~@shapes]]
+           (new ~type-name data# o# ~@strides ~@shapes))
 
-         (swap! ~'ctor-registry assoc ~dim ~raw-name))))
+         ;;(prn :ndarray ~dim ~type-hint ~type-name ~raw-name)
+
+         (swap!
+          ~'thi.ng.ndarray.core/ctor-registry
+          assoc-in [~dim ~type-hint]
+          {:ctor ~raw-name
+           :data-ctor ~data-ctor}))))
 #+END_SRC
 
 ** Constructors
@@ -202,38 +232,100 @@
 #+BEGIN_SRC clojure :noweb-ref ctors
   (def ctor-registry (atom {}))
 
-  (def-ndarray 1 #?(:clj IndexOutOfBoundsException :cljs js/Error) #?(:clj true))
-  (def-ndarray 2 #?(:clj IndexOutOfBoundsException :cljs js/Error) #?(:clj true))
-  (def-ndarray 3 #?(:clj IndexOutOfBoundsException :cljs js/Error) #?(:clj true))
-  (def-ndarray 4 #?(:clj IndexOutOfBoundsException :cljs js/Error) #?(:clj true))
+  #?(:clj
+     (do
+       (def-ndarray 1 nil :generic to-array aget aset true)
+       (def-ndarray 1 boolean :booleans boolean-array aget aset-boolean true)
+       (def-ndarray 1 byte :bytes byte-array aget aset-byte true)
+       (def-ndarray 1 short :shorts short-array aget aset-short true)
+       (def-ndarray 1 int :ints int-array aget aset-int true)
+       (def-ndarray 1 long :longs long-array aget aset-long true)
+       (def-ndarray 1 float :floats float-array aget aset-float true)
+       (def-ndarray 1 double :doubles double-array aget aset-double true)
 
-  (defmulti ndarray
-    (fn [data shape]
-      #?(:clj
-         (let [^Class c (class data)]
-           (if (.startsWith (.getName c) "[")
-             :array
-             (if (or (sequential? data) (string? data))
-               :to-array
-               c)))
-         :cljs
-         (if (a/array-type data)
-           :array
-           (if (or (sequential? data) (string? data))
-             :to-array)))))
+       (def-ndarray 2 nil :generic to-array aget aset true)
+       (def-ndarray 2 boolean :booleans boolean-array aget aset-boolean true)
+       (def-ndarray 2 byte :bytes byte-array aget aset-byte true)
+       (def-ndarray 2 short :shorts short-array aget aset-short true)
+       (def-ndarray 2 int :ints int-array aget aset-int true)
+       (def-ndarray 2 long :longs long-array aget aset-long true)
+       (def-ndarray 2 float :floats float-array aget aset-float true)
+       (def-ndarray 2 double :doubles double-array aget aset-double true)
 
-  (defmethod ndarray :default
-    [data _]
-    (throw (new #?(:clj IllegalArgumentException :cljs js/Error)
-                (str "Can't create ndarray from: " data))))
+       (def-ndarray 3 nil :generic to-array aget aset true)
+       (def-ndarray 3 boolean :booleans boolean-array aget aset-boolean true)
+       (def-ndarray 3 byte :bytes byte-array aget aset-byte true)
+       (def-ndarray 3 short :shorts short-array aget aset-short true)
+       (def-ndarray 3 int :ints int-array aget aset-int true)
+       (def-ndarray 3 long :longs long-array aget aset-long true)
+       (def-ndarray 3 float :floats float-array aget aset-float true)
+       (def-ndarray 3 double :doubles double-array aget aset-double true)
 
-  (defmethod ndarray :to-array
-    [data shape]
-    ((@ctor-registry (count shape)) aget aget (to-array data) 0 (shape->stride shape) shape))
+       (def-ndarray 4 nil :generic to-array aget aset true)
+       (def-ndarray 4 boolean :booleans boolean-array aget aset-boolean true)
+       (def-ndarray 4 byte :bytes byte-array aget aset-byte true)
+       (def-ndarray 4 short :shorts short-array aget aset-short true)
+       (def-ndarray 4 int :ints int-array aget aset-int true)
+       (def-ndarray 4 long :longs long-array aget aset-long true)
+       (def-ndarray 4 float :floats float-array aget aset-float true)
+       (def-ndarray 4 double :doubles double-array aget aset-double true)
+       )
+     :cljs
+     (do
+       (def-ndarray 1 nil :generic to-array aget aset false)
+       (def-ndarray 1 nil :uint8 a/uint8 aget aset false)
+       (def-ndarray 1 nil :uint8-clamped a/uint8-clamped aget aset false)
+       (def-ndarray 1 nil :uint16 a/uint16 aget aset false)
+       (def-ndarray 1 nil :uint32 a/uint32 aget aset false)
+       (def-ndarray 1 nil :int8 a/int8 aget aset false)
+       (def-ndarray 1 nil :int16 a/int16 aget aset false)
+       (def-ndarray 1 nil :int32 a/int32 aget aset false)
+       (def-ndarray 1 nil :float32 a/float32 aget aset false)
+       (def-ndarray 1 nil :float64 a/float64 aget aset false)
 
-  (defmethod ndarray :array
-    [data shape]
-    ((@ctor-registry (count shape)) aget aset data 0 (shape->stride shape) shape))
+       (def-ndarray 2 nil :generic to-array aget aset false)
+       (def-ndarray 2 nil :uint8 a/uint8 aget aset false)
+       (def-ndarray 2 nil :uint8-clamped a/uint8-clamped aget aset false)
+       (def-ndarray 2 nil :uint16 a/uint16 aget aset false)
+       (def-ndarray 2 nil :uint32 a/uint32 aget aset false)
+       (def-ndarray 2 nil :int8 a/int8 aget aset false)
+       (def-ndarray 2 nil :int16 a/int16 aget aset false)
+       (def-ndarray 2 nil :int32 a/int32 aget aset false)
+       (def-ndarray 2 nil :float32 a/float32 aget aset false)
+       (def-ndarray 2 nil :float64 a/float64 aget aset false)
+
+       (def-ndarray 3 nil :generic to-array aget aset false)
+       (def-ndarray 3 nil :uint8 a/uint8 aget aset false)
+       (def-ndarray 3 nil :uint8-clamped a/uint8-clamped aget aset false)
+       (def-ndarray 3 nil :uint16 a/uint16 aget aset false)
+       (def-ndarray 3 nil :uint32 a/uint32 aget aset false)
+       (def-ndarray 3 nil :int8 a/int8 aget aset false)
+       (def-ndarray 3 nil :int16 a/int16 aget aset false)
+       (def-ndarray 3 nil :int32 a/int32 aget aset false)
+       (def-ndarray 3 nil :float32 a/float32 aget aset false)
+       (def-ndarray 3 nil :float64 a/float64 aget aset false)
+
+       (def-ndarray 4 nil :generic to-array aget aset false)
+       (def-ndarray 4 nil :uint8 a/uint8 aget aset false)
+       (def-ndarray 4 nil :uint8-clamped a/uint8-clamped aget aset false)
+       (def-ndarray 4 nil :uint16 a/uint16 aget aset false)
+       (def-ndarray 4 nil :uint32 a/uint32 aget aset false)
+       (def-ndarray 4 nil :int8 a/int8 aget aset false)
+       (def-ndarray 4 nil :int16 a/int16 aget aset false)
+       (def-ndarray 4 nil :int32 a/int32 aget aset false)
+       (def-ndarray 4 nil :float32 a/float32 aget aset false)
+       (def-ndarray 4 nil :float64 a/float64 aget aset false)
+       ))
+
+  (defn ndarray
+    ([data shape]
+     (ndarray ::generic data shape))
+    ([type data shape]
+     (let [{:keys [ctor data-ctor]} (get-in @ctor-registry [(count shape) type])]
+       (if ctor
+         (ctor (if (sequential? data) (data-ctor data) data) 0 (shape->stride shape) shape)
+         (throw (new #?(:clj IllegalArgumentException :cljs js/Error)
+                     (str "Can't create ndarray for: " type " " data)))))))
 #+END_SRC
 
 ** Helper functions

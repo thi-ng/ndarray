@@ -13,7 +13,7 @@
   (deftest test-3d
     (let [shape [3 3 3]
           raw   (range (apply * shape))
-          a     (nd/ndarray #?(:clj :bytes :cljs :int8) raw shape)]
+          a     (nd/ndarray :int8 raw shape)]
       (is (satisfies? nd/PNDArray a))
       #?(:cljs (is (a/typed-array? (nd/data a))))
       (is (= shape (nd/shape a)))

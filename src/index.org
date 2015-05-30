@@ -81,6 +81,11 @@ target/ndarray-<<version>>.js
 #+BEGIN_SRC clojure :noweb-ref dep-autotest
 [lein-auto "0.1.2"]
 #+END_SRC
+**** [[https://github.com/hugoduncan/criterium][Criterium]]
+#+NAME: dep-criterium
+#+BEGIN_SRC clojure
+[criterium "0.4.3"]
+#+END_SRC
 
 ** Leiningen coordinates
 
@@ -118,6 +123,9 @@ the dev console.
 #+BEGIN_SRC bash
   cd babel
   lein cleantest
+
+  ;; or use auto test runner via lein-auto
+  lein auto test
 #+END_SRC
 
 Tangling this file will also generate a small HTML harness for the
@@ -145,7 +153,8 @@ browser.
 
     :plugins      [<<dep-autotest>>]
 
-    :profiles     {:dev {:plugins [<<dep-cljsbuild>>
+    :profiles     {:dev {:dependencies [<<dep-criterium>>]
+                         :plugins [<<dep-cljsbuild>>
                                    <<dep-cljs-test>>]
                          :global-vars {*warn-on-reflection* true}
                          :jvm-opts ^:replace []

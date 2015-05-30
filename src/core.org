@@ -14,23 +14,62 @@
 
 #+BEGIN_SRC clojure :noweb-ref api
   (defprotocol PNDArray
-    (data [_])
-    (data-type [_])
-    (dimension [_])
-    (shape [_])
-    (stride [_])
-    (offset [_])
-    (index-at [_ p])
-    (index-pos [_ i])
-    (get-at [_ p])
-    (get-at-unsafe [_ p])
-    (set-at [_ p v])
-    (set-at-unsafe [_ p v])
-    (hi [_ p])
-    (lo [_ p])
-    (transpose [_ p])
-    (step [_ p])
-    (pick [_ p]))
+    (data [_]
+      "Returns the backing data array")
+    (data-type [_]
+      "Returns the ndarray's type id (keyword)")
+    (dimension [_]
+      "Returns the ndarray's dimension")
+    (shape [_]
+      "Returns a vector of the ndarray's sizes in each dimension")
+    (stride [_]
+      "Returns a vector of the ndarray's stride in each dimension")
+    (offset [_]
+      "Returns the ndarray's start index in the backing data array")
+    (index-at [_ p]
+      "Returns the index into the backing array for given position in
+      this ndarray view")
+    (index-pos [_ i]
+      "Computes position in this ndarray view from given array index")
+    (index-seq [_]
+      "Returns a lazy seq of all array indices in a ndarray view")
+    (position-seq [_]
+      "Returns a lazy seq of all position vectors in a ndarray view")
+    (get-at [_ p]
+      "Returns value at given position (without bounds check,
+      assumes position is safe)")
+    (get-at-safe [_ p]
+      "Returns value at given position (with bounds check)")
+    (get-at-index [_ i])
+    (set-at [_ p v]
+      "Sets value in backing data array at given position
+      (without bounds check). Returns same NDArray instance.")
+    (set-at-safe [_ p v]
+      "Sets value in backing data array at given position (with bounds
+      check). Returns same NDArray instance.")
+    (set-at-index [_ i v])
+    (update-at [_ p f])
+    (update-at-safe [_ p f])
+    (update-at-index [_ i f])
+    (hi [_ p]
+      "Returns a new ndarray of same type with its shape truncated at
+      top end")
+    (lo [_ p]
+      "Returns a new ndarray of same type with its shape truncated at
+      lower end, effectively shifting its start index/offset.")
+    (transpose [_ t]
+      "Returns new ndarray view with stride order/axes swapped as per
+      given vector.")
+    (step [_ p]
+      "Returns new ndarray view with stride steps/direction changed as
+      per given vector. Values >1 result in skipping items, negative
+      value flip direction, `nil` keeps current stride for that
+      dimension.")
+    (pick [_ p]
+      "Accepts a vector of n-values, each selecting a slice of
+      dimension (nil skips a dimension). Returns new ndarray view of
+      selection, or if selecting in all dimensions, returns array value
+      at that point."))
 #+END_SRC
 
 ** NDArray generator macro
@@ -101,7 +140,7 @@
           bsyms     (make-symbols "b" dim)
           psyms     (make-symbols "p" dim)
           [->st ->sh ->a ->b ->p] (map #(comp symbol %) [strides shapes asyms bsyms psyms])
-          [c d p o] (repeatedly gensym)
+          [c d f p o] (repeatedly gensym)
           idx       (make-indexer dim ->st p)
           idx-syms  (make-indexer-syms dim ->st ->p)
           rdim      (range dim)]
@@ -134,19 +173,59 @@
                         c `(- ~c (* ~(->a %) ~(->st %))))
                       rdim)]
                [~@asyms]))
+           (~'index-seq
+             [_#]
+             (for [~@(mapcat #(vector (->a %) `(range ~(->sh %))) rdim)]
+               ~(make-indexer-syms dim ->st ->a)))
+           (~'position-seq
+             [_#]
+             (for [~@(mapcat #(vector (->a %) `(range ~(->sh %))) rdim)]
+               [~@asyms]))
            (~'get-at
+             [_# ~p]
+             (~get ~(type-hinted type-hint '_data) (int ~idx)))
+           (~'get-at-safe
              [_# [~@psyms]]
              ~(with-bounds-check dim psyms shapes clj?
                 `(~get ~(type-hinted type-hint '_data) (int ~idx-syms))))
-           (~'get-at-unsafe
-             [_# ~p] (~get ~(type-hinted type-hint '_data) (int ~idx)))
+           (~'get-at-index
+             [_# i#]
+             (~get ~(type-hinted type-hint '_data) (int i#)))
            (~'set-at
+             [_# ~p ~c]
+             (~set ~(type-hinted type-hint '_data) (int ~idx) ~(if cast `(~cast ~c) c)) _#)
+           (~'set-at-safe
              [_# [~@psyms] ~c]
              ~(with-bounds-check dim psyms shapes clj?
                 `(~set ~(type-hinted type-hint '_data) (int ~idx-syms) ~(if cast `(~cast ~c) c)))
              _#)
-           (~'set-at-unsafe
-             [_# ~p ~c] (~set ~(type-hinted type-hint '_data) (int ~idx) ~(if cast `(~cast ~c) c)) _#)
+           (~'set-at-index
+             [_# i# ~c]
+             (~set ~(type-hinted type-hint '_data) (int i#) ~(if cast `(~cast ~c) c)) _#)
+           (~'update-at
+             [_# ~p ~f]
+             (let [~c (int ~idx)]
+               (~set ~(type-hinted type-hint '_data) ~c
+                     ~(if cast
+                        `(~cast (~f ~p (~get ~(type-hinted type-hint '_data) ~c)))
+                        `(~f ~c (~get ~(type-hinted type-hint '_data) ~c)))))
+             _#)
+           (~'update-at-safe
+             [_# [~@psyms :as ~p] ~f]
+             ~(with-bounds-check dim psyms shapes clj?
+                `(let [~c (int ~idx-syms)]
+                   (~set ~(type-hinted type-hint '_data) ~c
+                         ~(if cast
+                            `(~cast (~f ~p (~get ~(type-hinted type-hint '_data) ~c)))
+                            `(~f ~c (~get ~(type-hinted type-hint '_data) ~c))))))
+             _#)
+           (~'update-at-index
+             [_# ~c ~f]
+             (~set ~(type-hinted type-hint '_data) ~c
+                   ~(if cast
+                      `(~cast (~f ~c (~get ~(type-hinted type-hint '_data) ~c)))
+                      `(~f ~c (~get ~(type-hinted type-hint '_data) ~c))))
+             _#)
            (~'hi
              [_# [~@psyms]]
              (new ~type-name ~'_data ~'_offset ~@strides

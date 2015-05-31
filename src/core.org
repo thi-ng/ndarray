@@ -3,8 +3,10 @@
 * Contents                                                         :toc_3_gh:
  - [[#namespace-thingndarraycore][Namespace: thi.ng.ndarray.core]]
      - [[#protocol-public-api-core-operations][Protocol (Public API core operations)]]
-     - [[#ndarray-generator-macro][NDArray generator macro]]
      - [[#constructors][Constructors]]
+         - [[#type-ids][Type IDs]]
+         - [[#implementations][Implementations]]
+     - [[#ndarray-generator-macro--registry][NDArray generator macro & registry]]
      - [[#helper-functions][Helper functions]]
      - [[#complete-namespace-definitions][Complete namespace definitions]]
 
@@ -12,9 +14,17 @@
 
 This library defines a datatype providing n-dimensional views over 1D
 arrays and provides a number of operations to work with these views
-efficiently.
+efficiently. Optimized =NDArray= types are provided for 1-4 dimensions
+and for all Java primitive array types (or in ClojureScript using JS
+typed arrays via the [[http://thi.ng/typedarrays][thi.ng/typedarrays]] library). Furthermore, generic
+(non-typehinted) implementations are available for each dimension too.
 
 ** Protocol (Public API core operations)
+
+In addition to the protocol based API below, the NDArray views also
+implement Clojure's =ISeqable= interface/protocol and can therefore be
+directly used with the usual sequence processing fns (=map=, =reduce=,
+=take= etc.)
 
 #+BEGIN_SRC clojure :noweb-ref api
   (defprotocol PNDArray
@@ -93,7 +103,153 @@ efficiently.
       returns array value at that point. Does not mutate backing array."))
 #+END_SRC
 
-** NDArray generator macro
+** Constructors
+
+NDArrays can be created via the =ndarray= function, which accepts the
+following arguments:
+
+- =type= - a keyword to choose a typed implementation
+- =data= - a pre-existing data array or Clojure sequence
+- =shape= - a vector of =n= elements defining the shape of the data in each dimension
+
+#+BEGIN_SRC clojure
+  ;; example = 3D array of 16 x 16 x 4 items
+  (nd/ndarray :float32 (range 27) [16 16 4])
+#+END_SRC
+
+*** Type IDs
+
+The table below lists all currently supported type IDs and their
+availability in Clojure & Clojurescript.
+
+| *ID*             | *CLJ?* | *CLJS?* | *Description*                          |
+|------------------+--------+---------+----------------------------------------|
+| =:generic=       | ✓      | ✓       | untyped generic backing array          |
+| =:int8=          | ✓      | ✓       | signed byte                            |
+| =:uint8=         |        | ✓       | unsigned byte                          |
+| =:uint8-clamped= |        | ✓       | unsigned byte (clamped to 0x00 - 0xff) |
+| =:int16=         | ✓      | ✓       | signed short                           |
+| =:uint16=        |        | ✓       | unsigned short                         |
+| =:int32=         | ✓      | ✓       | signed int                             |
+| =:uint32=        | ✓      | ✓       | unsigned int                           |
+| =:int64=         | ✓      |         | signed long                            |
+| =:float32=       | ✓      | ✓       | float                                  |
+| =:float64=       | ✓      | ✓       | double                                 |
+
+*** Implementations
+
+#+BEGIN_SRC clojure :noweb-ref ctors
+  (def ctor-registry (atom {}))
+
+  #?(:clj
+     (do
+       (def-ndarray 1 nil     nil        :generic to-array aget aset true)
+       (def-ndarray 1 boolean "booleans" :boolean boolean-array aget aset-boolean true)
+       (def-ndarray 1 byte    "bytes"    :int8    byte-array aget aset-byte true)
+       (def-ndarray 1 short   "shorts"   :int16   short-array aget aset-short true)
+       (def-ndarray 1 int     "ints"     :int32   int-array aget aset-int true)
+       (def-ndarray 1 long    "longs"    :int64   long-array aget aset-long true)
+       (def-ndarray 1 float   "floats"   :float32 float-array aget aset-float true)
+       (def-ndarray 1 double  "doubles"  :float64 double-array aget aset-double true)
+
+       (def-ndarray 2 nil     nil        :generic to-array aget aset true)
+       (def-ndarray 2 boolean "booleans" :boolean boolean-array aget aset-boolean true)
+       (def-ndarray 2 byte    "bytes"    :int8    byte-array aget aset-byte true)
+       (def-ndarray 2 short   "shorts"   :int26   short-array aget aset-short true)
+       (def-ndarray 2 int     "ints"     :int32   int-array aget aset-int true)
+       (def-ndarray 2 long    "longs"    :int64   long-array aget aset-long true)
+       (def-ndarray 2 float   "floats"   :float32 float-array aget aset-float true)
+       (def-ndarray 2 double  "doubles"  :float64 double-array aget aset-double true)
+
+       (def-ndarray 3 nil     nil        :generic to-array aget aset true)
+       (def-ndarray 3 boolean "booleans" :boolean boolean-array aget aset-boolean true)
+       (def-ndarray 3 byte    "bytes"    :int8    byte-array aget aset-byte true)
+       (def-ndarray 3 short   "shorts"   :int36   short-array aget aset-short true)
+       (def-ndarray 3 int     "ints"     :int32   int-array aget aset-int true)
+       (def-ndarray 3 long    "longs"    :int64   long-array aget aset-long true)
+       (def-ndarray 3 float   "floats"   :float32 float-array aget aset-float true)
+       (def-ndarray 3 double  "doubles"  :float64 double-array aget aset-double true)
+
+       (def-ndarray 4 nil     nil        :generic to-array aget aset true)
+       (def-ndarray 4 boolean "booleans" :boolean boolean-array aget aset-boolean true)
+       (def-ndarray 4 byte    "bytes"    :int8    byte-array aget aset-byte true)
+       (def-ndarray 4 short   "shorts"   :int46   short-array aget aset-short true)
+       (def-ndarray 4 int     "ints"     :int32   int-array aget aset-int true)
+       (def-ndarray 4 long    "longs"    :int64   long-array aget aset-long true)
+       (def-ndarray 4 float   "floats"   :float32 float-array aget aset-float true)
+       (def-ndarray 4 double  "doubles"  :float64 double-array aget aset-double true)
+       )
+     :cljs
+     (do
+       (def-ndarray 1 nil nil :generic to-array aget aset false)
+       (def-ndarray 1 nil nil :uint8 a/uint8 aget aset false)
+       (def-ndarray 1 nil nil :uint8-clamped a/uint8-clamped aget aset false)
+       (def-ndarray 1 nil nil :uint16 a/uint16 aget aset false)
+       (def-ndarray 1 nil nil :uint32 a/uint32 aget aset false)
+       (def-ndarray 1 nil nil :int8 a/int8 aget aset false)
+       (def-ndarray 1 nil nil :int16 a/int16 aget aset false)
+       (def-ndarray 1 nil nil :int32 a/int32 aget aset false)
+       (def-ndarray 1 nil nil :float32 a/float32 aget aset false)
+       (def-ndarray 1 nil nil :float64 a/float64 aget aset false)
+
+       (def-ndarray 2 nil nil :generic to-array aget aset false)
+       (def-ndarray 2 nil nil :uint8 a/uint8 aget aset false)
+       (def-ndarray 2 nil nil :uint8-clamped a/uint8-clamped aget aset false)
+       (def-ndarray 2 nil nil :uint16 a/uint16 aget aset false)
+       (def-ndarray 2 nil nil :uint32 a/uint32 aget aset false)
+       (def-ndarray 2 nil nil :int8 a/int8 aget aset false)
+       (def-ndarray 2 nil nil :int16 a/int16 aget aset false)
+       (def-ndarray 2 nil nil :int32 a/int32 aget aset false)
+       (def-ndarray 2 nil nil :float32 a/float32 aget aset false)
+       (def-ndarray 2 nil nil :float64 a/float64 aget aset false)
+
+       (def-ndarray 3 nil nil :generic to-array aget aset false)
+       (def-ndarray 3 nil nil :uint8 a/uint8 aget aset false)
+       (def-ndarray 3 nil nil :uint8-clamped a/uint8-clamped aget aset false)
+       (def-ndarray 3 nil nil :uint16 a/uint16 aget aset false)
+       (def-ndarray 3 nil nil :uint32 a/uint32 aget aset false)
+       (def-ndarray 3 nil nil :int8 a/int8 aget aset false)
+       (def-ndarray 3 nil nil :int16 a/int16 aget aset false)
+       (def-ndarray 3 nil nil :int32 a/int32 aget aset false)
+       (def-ndarray 3 nil nil :float32 a/float32 aget aset false)
+       (def-ndarray 3 nil nil :float64 a/float64 aget aset false)
+
+       (def-ndarray 4 nil nil :generic to-array aget aset false)
+       (def-ndarray 4 nil nil :uint8 a/uint8 aget aset false)
+       (def-ndarray 4 nil nil :uint8-clamped a/uint8-clamped aget aset false)
+       (def-ndarray 4 nil nil :uint16 a/uint16 aget aset false)
+       (def-ndarray 4 nil nil :uint32 a/uint32 aget aset false)
+       (def-ndarray 4 nil nil :int8 a/int8 aget aset false)
+       (def-ndarray 4 nil nil :int16 a/int16 aget aset false)
+       (def-ndarray 4 nil nil :int32 a/int32 aget aset false)
+       (def-ndarray 4 nil nil :float32 a/float32 aget aset false)
+       (def-ndarray 4 nil nil :float64 a/float64 aget aset false)
+       ))
+
+  (defn ndarray
+    ([data shape]
+     (ndarray ::generic data shape))
+    ([type data shape]
+     (let [{:keys [ctor data-ctor]} (get-in @ctor-registry [(count shape) type])]
+       (if ctor
+         (ctor (if (sequential? data) (data-ctor data) data) 0 (shape->stride shape) shape)
+         (throw (new #?(:clj IllegalArgumentException :cljs js/Error)
+                     (str "Can't create ndarray for: " type " " data)))))))
+#+END_SRC
+
+** NDArray generator macro & registry
+
+The NDArray types are all generated by the macro =def-ndarray= defined
+in this section. Due to CLJS restrictions, this macro (and its helper
+fns) is actually defined in its own namespace =thi.ng.ndarray.macro=,
+but this namespace should be considered opaque for user applications
+(only =ndarray.core=) is required for userland apps.
+
+For each generated =NDArray= type, the macro also produces a custom
+factory function and registers it in the
+=thi.ng.ndarray.core/ctor-registry= atom. This registry is used by the
+public =ndarray= constructor fn to choose the correct type
+implementation for the given arguments.
 
 #+BEGIN_SRC clojure :noweb-ref macros
   (defn- type-hinted
@@ -320,107 +476,6 @@ efficiently.
           assoc-in [~dim ~type-id]
           {:ctor ~raw-name
            :data-ctor ~data-ctor}))))
-#+END_SRC
-
-** Constructors
-
-#+BEGIN_SRC clojure :noweb-ref ctors
-  (def ctor-registry (atom {}))
-
-  #?(:clj
-     (do
-       (def-ndarray 1 nil     nil        :generic to-array aget aset true)
-       (def-ndarray 1 boolean "booleans" :boolean boolean-array aget aset-boolean true)
-       (def-ndarray 1 byte    "bytes"    :int8    byte-array aget aset-byte true)
-       (def-ndarray 1 short   "shorts"   :int16   short-array aget aset-short true)
-       (def-ndarray 1 int     "ints"     :int32   int-array aget aset-int true)
-       (def-ndarray 1 long    "longs"    :int64   long-array aget aset-long true)
-       (def-ndarray 1 float   "floats"   :float32 float-array aget aset-float true)
-       (def-ndarray 1 double  "doubles"  :float64 double-array aget aset-double true)
-
-       (def-ndarray 2 nil     nil        :generic to-array aget aset true)
-       (def-ndarray 2 boolean "booleans" :boolean boolean-array aget aset-boolean true)
-       (def-ndarray 2 byte    "bytes"    :int8    byte-array aget aset-byte true)
-       (def-ndarray 2 short   "shorts"   :int26   short-array aget aset-short true)
-       (def-ndarray 2 int     "ints"     :int32   int-array aget aset-int true)
-       (def-ndarray 2 long    "longs"    :int64   long-array aget aset-long true)
-       (def-ndarray 2 float   "floats"   :float32 float-array aget aset-float true)
-       (def-ndarray 2 double  "doubles"  :float64 double-array aget aset-double true)
-
-       (def-ndarray 3 nil     nil        :generic to-array aget aset true)
-       (def-ndarray 3 boolean "booleans" :boolean boolean-array aget aset-boolean true)
-       (def-ndarray 3 byte    "bytes"    :int8    byte-array aget aset-byte true)
-       (def-ndarray 3 short   "shorts"   :int36   short-array aget aset-short true)
-       (def-ndarray 3 int     "ints"     :int32   int-array aget aset-int true)
-       (def-ndarray 3 long    "longs"    :int64   long-array aget aset-long true)
-       (def-ndarray 3 float   "floats"   :float32 float-array aget aset-float true)
-       (def-ndarray 3 double  "doubles"  :float64 double-array aget aset-double true)
-
-       (def-ndarray 4 nil     nil        :generic to-array aget aset true)
-       (def-ndarray 4 boolean "booleans" :boolean boolean-array aget aset-boolean true)
-       (def-ndarray 4 byte    "bytes"    :int8    byte-array aget aset-byte true)
-       (def-ndarray 4 short   "shorts"   :int46   short-array aget aset-short true)
-       (def-ndarray 4 int     "ints"     :int32   int-array aget aset-int true)
-       (def-ndarray 4 long    "longs"    :int64   long-array aget aset-long true)
-       (def-ndarray 4 float   "floats"   :float32 float-array aget aset-float true)
-       (def-ndarray 4 double  "doubles"  :float64 double-array aget aset-double true)
-       )
-     :cljs
-     (do
-       (def-ndarray 1 nil nil :generic to-array aget aset false)
-       (def-ndarray 1 nil nil :uint8 a/uint8 aget aset false)
-       (def-ndarray 1 nil nil :uint8-clamped a/uint8-clamped aget aset false)
-       (def-ndarray 1 nil nil :uint16 a/uint16 aget aset false)
-       (def-ndarray 1 nil nil :uint32 a/uint32 aget aset false)
-       (def-ndarray 1 nil nil :int8 a/int8 aget aset false)
-       (def-ndarray 1 nil nil :int16 a/int16 aget aset false)
-       (def-ndarray 1 nil nil :int32 a/int32 aget aset false)
-       (def-ndarray 1 nil nil :float32 a/float32 aget aset false)
-       (def-ndarray 1 nil nil :float64 a/float64 aget aset false)
-
-       (def-ndarray 2 nil nil :generic to-array aget aset false)
-       (def-ndarray 2 nil nil :uint8 a/uint8 aget aset false)
-       (def-ndarray 2 nil nil :uint8-clamped a/uint8-clamped aget aset false)
-       (def-ndarray 2 nil nil :uint16 a/uint16 aget aset false)
-       (def-ndarray 2 nil nil :uint32 a/uint32 aget aset false)
-       (def-ndarray 2 nil nil :int8 a/int8 aget aset false)
-       (def-ndarray 2 nil nil :int16 a/int16 aget aset false)
-       (def-ndarray 2 nil nil :int32 a/int32 aget aset false)
-       (def-ndarray 2 nil nil :float32 a/float32 aget aset false)
-       (def-ndarray 2 nil nil :float64 a/float64 aget aset false)
-
-       (def-ndarray 3 nil nil :generic to-array aget aset false)
-       (def-ndarray 3 nil nil :uint8 a/uint8 aget aset false)
-       (def-ndarray 3 nil nil :uint8-clamped a/uint8-clamped aget aset false)
-       (def-ndarray 3 nil nil :uint16 a/uint16 aget aset false)
-       (def-ndarray 3 nil nil :uint32 a/uint32 aget aset false)
-       (def-ndarray 3 nil nil :int8 a/int8 aget aset false)
-       (def-ndarray 3 nil nil :int16 a/int16 aget aset false)
-       (def-ndarray 3 nil nil :int32 a/int32 aget aset false)
-       (def-ndarray 3 nil nil :float32 a/float32 aget aset false)
-       (def-ndarray 3 nil nil :float64 a/float64 aget aset false)
-
-       (def-ndarray 4 nil nil :generic to-array aget aset false)
-       (def-ndarray 4 nil nil :uint8 a/uint8 aget aset false)
-       (def-ndarray 4 nil nil :uint8-clamped a/uint8-clamped aget aset false)
-       (def-ndarray 4 nil nil :uint16 a/uint16 aget aset false)
-       (def-ndarray 4 nil nil :uint32 a/uint32 aget aset false)
-       (def-ndarray 4 nil nil :int8 a/int8 aget aset false)
-       (def-ndarray 4 nil nil :int16 a/int16 aget aset false)
-       (def-ndarray 4 nil nil :int32 a/int32 aget aset false)
-       (def-ndarray 4 nil nil :float32 a/float32 aget aset false)
-       (def-ndarray 4 nil nil :float64 a/float64 aget aset false)
-       ))
-
-  (defn ndarray
-    ([data shape]
-     (ndarray ::generic data shape))
-    ([type data shape]
-     (let [{:keys [ctor data-ctor]} (get-in @ctor-registry [(count shape) type])]
-       (if ctor
-         (ctor (if (sequential? data) (data-ctor data) data) 0 (shape->stride shape) shape)
-         (throw (new #?(:clj IllegalArgumentException :cljs js/Error)
-                     (str "Can't create ndarray for: " type " " data)))))))
 #+END_SRC
 
 ** Helper functions

@@ -6,6 +6,13 @@
 * Contents                                                         :toc_3_gh:
  - [[#about-the-project][About the project]]
      - [[#description][Description]]
+     - [[#example-usage][Example usage]]
+         - [[#transpose-matrix][Transpose matrix]]
+         - [[#reverse-direction-in-any-dimension][Reverse direction in any dimension]]
+         - [[#skip-items-in-any-dimension][Skip items in any dimension]]
+         - [[#extract-slices-of-a-volume][Extract slices of a volume]]
+         - [[#fill-subsection-of-an-array][Fill subsection of an array]]
+         - [[#undirected-graph-queries-via-adjacency-matrix][Undirected graph queries via adjacency matrix]]
  - [[#namespaces][Namespaces]]
  - [[#tests][Tests]]
  - [[#project-definition][Project definition]]
@@ -29,8 +36,139 @@
 ** Description
 
 This library is a Clojure/Clojurescript port of Mikola Lysenko's
-ndarray core JS library with extended features, which make more sense
-in a Clojure context.
+[[https://github.com/scijs/ndarray][ndarray]] core JS library with extended features to make more sense in a
+Clojure context.
+
+** Example usage
+
+#+BEGIN_SRC clojure
+  (require '[thi.ng.ndarray.core :as nd])
+#+END_SRC
+
+*** Transpose matrix
+
+The =ndarray= constructor automatically coerces a Clojure seq into the
+correct array type (if not given as array already). =transpose= allows
+swapping the axis order without any copying.
+
+#+BEGIN_SRC clojure
+  (def a (nd/ndarray :float64 (range 16) [4 4]))
+  (seq a)
+  ;; => (0.0 1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0 10.0 11.0 12.0 13.0 14.0 15.0)
+  (seq (nd/transpose a 1 0))
+  ;; => (0.0 4.0 8.0 12.0 1.0 5.0 9.0 13.0 2.0 6.0 10.0 14.0 3.0 7.0 11.0 15.0)
+#+END_SRC
+
+*** Reverse direction in any dimension
+
+Likewise, step order can be independently flipped/manipulated in any dimension...
+
+#+BEGIN_SRC clojure
+  (def a (nd/ndarray :float64 (range 16) [4 4]))
+  (seq (nd/step a -1 nil))
+  ;; => (12.0 13.0 14.0 15.0 8.0 9.0 10.0 11.0 4.0 5.0 6.0 7.0 0.0 1.0 2.0 3.0)
+  (seq (nd/step a nil -1))
+  ;; => (3.0 2.0 1.0 0.0 7.0 6.0 5.0 4.0 11.0 10.0 9.0 8.0 15.0 14.0 13.0 12.0)
+#+END_SRC
+
+*** Skip items in any dimension
+
+#+BEGIN_SRC clojure
+  (def a (nd/ndarray :float64 (range 16) [4 4]))
+  (seq (nd/step a 2 2))
+  ;; => (0.0 2.0 8.0 10.0)
+
+  ;; ...optionally with offset
+  (-> a (nd/truncate-l 0 1) (nd/step 2 2) seq)
+  ;; => (1.0 3.0 9.0 11.0)
+#+END_SRC
+
+*** Extract slices of a volume
+
+#+BEGIN_SRC clojure
+  (def a (nd/ndarray :float32 (range 27) [3 3 3]))
+  (seq (nd/pick a 2 nil nil))
+  ;; => (18.0 19.0 20.0 21.0 22.0 23.0 24.0 25.0 26.0)
+  (seq (nd/pick a nil 2 nil))
+  ;; => (6.0 7.0 8.0 15.0 16.0 17.0 24.0 25.0 26.0)
+  (seq (nd/pick a nil nil 2))
+  ;; => (2.0 5.0 8.0 11.0 14.0 17.0 20.0 23.0 26.0)
+  (seq (nd/pick a nil 0 0))
+  ;; (0.0 9.0 18.0)
+#+END_SRC
+
+*** Fill subsection of an array
+
+#+BEGIN_SRC clojure
+  (def a (nd/ndarray :int8 (byte-array 25) [5 5]))
+  (dorun
+   (for [i (-> a (nd/truncate-h 4 4) (nd/truncate-l 1 1) nd/index-seq)]
+     (nd/set-at-index a i 1)))
+  (seq a)
+
+  ;; (0 0 0 0 0
+  ;;  0 1 1 1 0
+  ;;  0 1 1 1 0
+  ;;  0 1 1 1 0
+  ;;  0 0 0 0 0)
+#+END_SRC
+
+*** Undirected graph queries via adjacency matrix
+
+A slightly larger example to demonstrate connected component queries on a graph:
+
+#+BEGIN_SRC clojure
+  (defn adjacency-mat
+    [ids]
+    (let [n (count ids)]
+      (nd/ndarray :boolean (repeat (* n n) false) [n n])))
+
+  (defn add-edge
+    [index mat [a b]]
+    (-> mat
+        (nd/set-at (index a) (index b) true)
+        (nd/set-at (index b) (index a) true)))
+
+  (defn edge?
+    [index mat [a b]]
+    (nd/get-at mat (index a) (index b)))
+
+  (defn neighbors
+    [index rev-index mat x]
+    (sequence
+     (comp
+      (map-indexed (fn [i rel] (if rel (rev-index i))))
+      (filter identity))
+     (nd/pick mat (index x) nil)))
+
+  (defn all-connected
+    ([index rev-index mat q]
+     (all-connected index rev-index mat #{} #{} [q]))
+    ([index rev-index mat acc seen q]
+     (let [n    (->> q
+                     (filter (complement seen))
+                     (mapcat #(neighbors index rev-index graph %)))
+           acc' (into acc n)]
+       (if (= acc acc')
+         acc
+         (recur index rev-index mat acc' (into seen q) n)))))
+
+  (def index {:a 0 :b 1 :c 2 :d 3 :e 4 :f 5})
+  (def rev-index (reduce-kv #(assoc % %3 %2) {} index))
+
+  (def graph
+    (reduce
+     (partial add-edge index)
+     (adjacency-mat index)
+     [[:a :b] [:b :d] [:d :c] [:e :f]]))
+
+  (edge? index graph [:b :a]) ;; => true
+  (edge? index graph [:a :c]) ;; => false
+  (neighbors index rev-index graph :c) ;; => (:a :d)
+
+  (all-connected index rev-index graph :a) ;; => #{:c :b :d :a}
+  (all-connected index rev-index graph :f) ;; => #{:e :f}
+#+END_SRC
 
 * Namespaces
 

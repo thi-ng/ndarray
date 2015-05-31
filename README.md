@@ -1,10 +1,10 @@
 # thi.ng/ndarray
 
 This library is a Clojure/Clojurescript port of Mikola Lysenko's
-ndarray core JS library with extended features, which make more sense
-in a Clojure context.
+[ndarray core](https://github.com/scijs/ndarray) JS library with
+extended features, to make more sense in a Clojure context.
 
-Please see [index.org](src/index.org) for further information.
+Please see [index.org](src/index.org) for further information & examples.
 
 ## Current Leiningen coordinates
 

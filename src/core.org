@@ -151,6 +151,10 @@ efficiently.
          (for [~@(mapcat #(vector (->a %) `(range ~(->sh %))) rdim)]
            (~get ~data ~idx))))))
 
+  (defn- do-cast
+    [cast body]
+    (if cast `(~cast ~body) body))
+
   (defmacro def-ndarray
     [dim cast type-hint type-id data-ctor get set & [clj?]]
     (let [type-name (symbol (str "NDArray" dim (name type-id)))
@@ -216,38 +220,30 @@ efficiently.
              (~get ~data (int i#)))
            (~'set-at
              [_# ~@psyms ~c]
-             (~set ~data ~idx-syms ~(if cast `(~cast ~c) c)) _#)
+             (~set ~data ~idx-syms ~(do-cast cast c)) _#)
            (~'set-at-safe
              [_# ~@psyms ~c]
              ~(with-bounds-check dim psyms shapes clj?
-                `(~set ~data ~idx-syms ~(if cast `(~cast ~c) c)))
+                `(~set ~data ~idx-syms ~(do-cast cast c)))
              _#)
            (~'set-at-index
              [_# i# ~c]
-             (~set ~data (int i#) ~(if cast `(~cast ~c) c)) _#)
+             (~set ~data (int i#) ~(do-cast cast c)) _#)
            (~'update-at
              [_# ~@psyms ~f]
              (let [~c ~idx-syms]
-               (~set ~data ~c
-                     ~(if cast
-                        `(~cast (~f ~@psyms (~get ~data ~c)))
-                        `(~f ~@psyms (~get ~data ~c)))))
+               (~set ~data ~c ~(do-cast cast `(~f ~@psyms (~get ~data ~c)))))
              _#)
            (~'update-at-safe
              [_# ~@psyms ~f]
              ~(with-bounds-check dim psyms shapes clj?
                 `(let [~c ~idx-syms]
-                   (~set ~data ~c
-                         ~(if cast
-                            `(~cast (~f ~@psyms (~get ~data ~c)))
-                            `(~f ~@psyms (~get ~data ~c))))))
+                   (~set ~data ~c ~(do-cast cast `(~f ~@psyms (~get ~data ~c))))))
              _#)
            (~'update-at-index
              [_# ~c ~f]
              (~set ~data ~c
-                   ~(if cast
-                      `(~cast (~f ~c (~get ~data ~c)))
-                      `(~f ~c (~get ~data ~c))))
+                   ~(do-cast cast `(~f ~c (~get ~data ~c))))
              _#)
            (~'truncate-h
              [_# ~@psyms]

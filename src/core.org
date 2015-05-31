@@ -120,7 +120,7 @@ attempting to set array values.
 
 #+BEGIN_SRC clojure
   ;; example = 3D array of 16 x 16 x 4 items
-  (nd/ndarray :float32 (range 27) [16 16 4])
+  (nd/ndarray :float32 (float-array 1024) [16 16 4])
 #+END_SRC
 
 *** Supported type IDs

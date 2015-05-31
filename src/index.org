@@ -183,7 +183,7 @@ A slightly larger example to demonstrate connected component queries on a graph:
 ** Injected properties                                             :noexport:
 
 #+BEGIN_SRC clojure :noweb-ref version
-0.1.0-SNAPSHOT
+0.1.0
 #+END_SRC
 #+BEGIN_SRC clojure :exports none :noweb-ref project-url
 http://thi.ng/ndarray
@@ -228,7 +228,7 @@ target/ndarray-<<version>>.js
 ** Leiningen coordinates
 
 #+BEGIN_SRC clojure :noweb yes :noweb-ref lein-coords
-  [thi.ng/ndarray "0.1.0-SNAPSHOT"]
+  [thi.ng/ndarray "0.1.0"]
 #+END_SRC
 
 ** Building this project
@@ -253,10 +253,10 @@ is complete, you can =cd= into the generated project directory
 *** Testing
 
 The =project.clj= file defines an alias to trigger a complete build &
-tests. Since PhantomJS (the usual test runner for other thi.ng
-projects) doesn't support typed arrays, the =cleantest= command will
-run the tests in your default browser. Test results are displayed in
-the dev console.
+tests for both Clojure & Clojurescript. Since PhantomJS (the usual
+test runner for other thi.ng projects) doesn't support typed arrays,
+the =cleantest= command will run the Clojurescript tests in your
+default browser and test results are displayed in the dev console.
 
 #+BEGIN_SRC bash
   cd babel
@@ -351,7 +351,7 @@ symbol =version= holding the version string defined above:
 
 | *Version* | *Released* | *Description*        | *Lein coordinates*         | *Tagged Github URL* |
 |-----------+------------+----------------------+----------------------------+---------------------|
-|     0.1.0 | 2015-05-26 | initial test release | =[thi.ng/ndarray "0.1.0"]= | [[https://github.com/thi-ng/typedarrays/tree/0.1.0][0.1.0]]               |
+|     0.1.0 | 2015-05-31 | initial test release | =[thi.ng/ndarray "0.1.0"]= | [[https://github.com/thi-ng/typedarrays/tree/0.1.0][0.1.0]]               |
 
 ** Contributors
 

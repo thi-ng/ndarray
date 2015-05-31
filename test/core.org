@@ -4,6 +4,7 @@
  - [[#thingndarraytestcore][thi.ng.ndarray.test.core]]
      - [[#main-tests][Main tests]]
      - [[#complete-namespace-definition][Complete namespace definition]]
+         - [[#scratch-ignore][Scratch (ignore)]]
 
 * thi.ng.ndarray.test.core
 
@@ -55,7 +56,8 @@
       ))
 #+END_SRC
 
-#+BEGIN_SRC clojure :noweb-ref test
+#+BEGIN_SRC clojure
+  ;; :noweb-ref test
   (deftest bench1
     (time
      (dotimes [i 16]
@@ -95,6 +97,8 @@
        (t/run-all-tests)
        (prn "Can't test - typed arrays not supported!")))
 #+END_SRC
+
+*** Scratch (ignore)
 
 #+BEGIN_SRC clojure
   (use 'criterium.core)

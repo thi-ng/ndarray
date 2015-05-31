@@ -9,5 +9,5 @@ Please see [index.org](src/index.org) for further information & examples.
 ## Current Leiningen coordinates
 
 ```clj
-[thi.ng/ndarray "0.1.0-SNAPSHOT"]
+[thi.ng/ndarray "0.1.0"]
 ```

@@ -2,7 +2,7 @@
 
 * Contents                                                         :toc_3_gh:
  - [[#namespace-thingndarraycore][Namespace: thi.ng.ndarray.core]]
-     - [[#protocols][Protocols]]
+     - [[#protocol-public-api-core-operations][Protocol (Public API core operations)]]
      - [[#ndarray-generator-macro][NDArray generator macro]]
      - [[#constructors][Constructors]]
      - [[#helper-functions][Helper functions]]
@@ -10,66 +10,87 @@
 
 * Namespace: thi.ng.ndarray.core
 
-** Protocols
+This library defines a datatype providing n-dimensional views over 1D
+arrays and provides a number of operations to work with these views
+efficiently.
+
+** Protocol (Public API core operations)
 
 #+BEGIN_SRC clojure :noweb-ref api
   (defprotocol PNDArray
     (data [_]
-      "Returns the backing data array")
+      "Returns the backing data array.")
     (data-type [_]
-      "Returns the ndarray's type id (keyword)")
+      "Returns the ndarray's type id (keyword).")
     (dimension [_]
-      "Returns the ndarray's dimension")
+      "Returns the ndarray's dimension.")
     (shape [_]
-      "Returns a vector of the ndarray's sizes in each dimension")
+      "Returns a vector of the ndarray's sizes in each dimension.")
     (stride [_]
-      "Returns a vector of the ndarray's stride in each dimension")
+      "Returns a vector of the ndarray's strides in each dimension.")
     (offset [_]
-      "Returns the ndarray's start index in the backing data array")
-    (index-at [_ p]
-      "Returns the index into the backing array for given position in
-      this ndarray view")
+      "Returns the ndarray view's start index in the backing data array")
+    (index-at [_ x] [_ x y] [_ x y z] [_ x y z w]
+      "Returns the global index into the backing array for given
+      position in an ndarray view.")
     (index-pos [_ i]
-      "Computes position in this ndarray view from given array index")
+      "Computes relative position in an ndarray view from given absolute
+      array index.")
     (index-seq [_]
-      "Returns a lazy seq of all array indices in a ndarray view")
+      "Returns a lazy seq of all array indices in an ndarray view.")
     (position-seq [_]
-      "Returns a lazy seq of all position vectors in a ndarray view")
-    (get-at [_ p]
-      "Returns value at given position (without bounds check,
-      assumes position is safe)")
-    (get-at-safe [_ p]
-      "Returns value at given position (with bounds check)")
-    (get-at-index [_ i])
-    (set-at [_ p v]
-      "Sets value in backing data array at given position
-      (without bounds check). Returns same NDArray instance.")
-    (set-at-safe [_ p v]
-      "Sets value in backing data array at given position (with bounds
-      check). Returns same NDArray instance.")
-    (set-at-index [_ i v])
-    (update-at [_ p f])
-    (update-at-safe [_ p f])
-    (update-at-index [_ i f])
-    (hi [_ p]
+      "Returns a lazy seq of all position vectors in an ndarray view.")
+    (get-at [_ x] [_ x y] [_ x y z] [_ x y z w]
+      "Returns value at given position in an ndarray view (without bounds check,
+      assumes position is safe).")
+    (get-at-safe [_ x] [_ x y] [_ x y z] [_ x y z w]
+      "Returns value at given position in an ndarray view (with bounds
+      check)")
+    (get-at-index [_ i]
+      "Returns value at given global index in an ndarray view's backing
+      array.")
+    (set-at [_ x v] [_ x y v] [_ x y z v] [_ x y z w v]
+      "Sets backing data array at given position in an ndarray view to
+      new value v (without bounds check). Returns same NDArray instance.")
+    (set-at-safe [_ x v] [_ x y v] [_ x y z v] [_ x y z w v]
+      "Sets backing array at given position in an ndarray view to
+      new value v (with bounds check). Returns same NDArray instance.")
+    (set-at-index [_ i v]
+      "Sets backing data array at given global index to new value
+      v (without bounds check). Returns same NDArray instance.")
+    (update-at [_ x f] [_ x y f] [_ x y z f] [_ x y z w f]
+      "Applies function f to given position in an ndarray view and sets
+      backing array at same position to the return value of f. The
+      function f itself accepts m args: first the n coordinates of the
+      position and the value at this position")
+    (update-at-safe [_ x f] [_ x y f] [_ x y z f] [_ x y z w f]
+      "Same as `update-at` but with bounds check.")
+    (update-at-index [_ i f]
+      "Applies function f to given global index in an ndarray's view
+      backing array and sets it to the return value of f. The
+      function f itself accepts 2 args: the supplied array index
+      and the array's value at this index")
+    (truncate-h [_ x] [_ x y] [_ x y z] [_ x y z w]
       "Returns a new ndarray of same type with its shape truncated at
-      top end")
-    (lo [_ p]
+      top end. Negative args are considered offsets from current shape.
+      Does not mutate backing array.")
+    (truncate-l [_ x] [_ x y] [_ x y z] [_ x y z w]
       "Returns a new ndarray of same type with its shape truncated at
-      lower end, effectively shifting its start index/offset.")
-    (transpose [_ t]
-      "Returns new ndarray view with stride order/axes swapped as per
-      given vector.")
-    (step [_ p]
+      lower end, effectively shifting its start index/offset towards the
+      center of the view. Does not mutate backing array.")
+    (transpose [_ x] [_ x y] [_ x y z] [_ x y z w]
+      "Returns a new ndarray view with stride order/axes swapped as per
+      given vector. Does not mutate backing array.")
+    (step [_ x] [_ x y] [_ x y z] [_ x y z w]
       "Returns new ndarray view with stride steps/direction changed as
-      per given vector. Values >1 result in skipping items, negative
-      value flip direction, `nil` keeps current stride for that
-      dimension.")
-    (pick [_ p]
-      "Accepts a vector of n-values, each selecting a slice of
-      dimension (nil skips a dimension). Returns new ndarray view of
-      selection, or if selecting in all dimensions, returns array value
-      at that point."))
+      per given vector. Values >1 result in skipping of items in that
+      dimension, negative value flip direction, `nil` keeps current
+      stride for that dimension. Does not mutate backing array.")
+    (pick [_ x] [_ x y] [_ x y z] [_ x y z w]
+      "Generalized getter. Accepts n args (e.g. 3 for a 3D ndarray),
+      each selecting a dimension slice (nil skips a dimension). Returns
+      new ndarray view of selection, or if selecting in all dimensions,
+      returns array value at that point. Does not mutate backing array."))
 #+END_SRC
 
 ** NDArray generator macro
@@ -89,14 +110,14 @@
     [dim ->st p]
     `(+ ~@(->> (range dim)
                (map #(list '* (->st %) `(int (~p ~%))))
-               (concat ['_offset])
+               (cons '_offset)
                (pair-fn '+))))
 
   (defn- make-indexer-syms
     [dim ->st ->p]
     `(+ ~@(->> (range dim)
-               (map #(list '* (->st %) (->p %)))
-               (concat ['_offset])
+               (map #(list '* (->st %) `(int ~(->p %))))
+               (cons '_offset)
                (pair-fn '+))))
 
   (defn- with-bounds-check
@@ -162,7 +183,7 @@
            (~'offset
              [_#] ~'_offset)
            (~'index-at
-             [_# ~p] ~idx)
+             [_# ~@psyms] ~idx-syms)
            (~'index-pos
              [_# ~p]
              (let [~p (int ~p)
@@ -182,20 +203,20 @@
              (for [~@(mapcat #(vector (->a %) `(range ~(->sh %))) rdim)]
                [~@asyms]))
            (~'get-at
-             [_# ~p]
-             (~get ~(type-hinted type-hint '_data) (int ~idx)))
+             [_# ~@psyms]
+             (~get ~(type-hinted type-hint '_data) (int ~idx-syms)))
            (~'get-at-safe
-             [_# [~@psyms]]
+             [_# ~@psyms]
              ~(with-bounds-check dim psyms shapes clj?
                 `(~get ~(type-hinted type-hint '_data) (int ~idx-syms))))
            (~'get-at-index
              [_# i#]
              (~get ~(type-hinted type-hint '_data) (int i#)))
            (~'set-at
-             [_# ~p ~c]
-             (~set ~(type-hinted type-hint '_data) (int ~idx) ~(if cast `(~cast ~c) c)) _#)
+             [_# ~@psyms ~c]
+             (~set ~(type-hinted type-hint '_data) (int ~idx-syms) ~(if cast `(~cast ~c) c)) _#)
            (~'set-at-safe
-             [_# [~@psyms] ~c]
+             [_# ~@psyms ~c]
              ~(with-bounds-check dim psyms shapes clj?
                 `(~set ~(type-hinted type-hint '_data) (int ~idx-syms) ~(if cast `(~cast ~c) c)))
              _#)
@@ -203,21 +224,21 @@
              [_# i# ~c]
              (~set ~(type-hinted type-hint '_data) (int i#) ~(if cast `(~cast ~c) c)) _#)
            (~'update-at
-             [_# ~p ~f]
-             (let [~c (int ~idx)]
+             [_# ~@psyms ~f]
+             (let [~c (int ~idx-syms)]
                (~set ~(type-hinted type-hint '_data) ~c
                      ~(if cast
-                        `(~cast (~f ~p (~get ~(type-hinted type-hint '_data) ~c)))
-                        `(~f ~c (~get ~(type-hinted type-hint '_data) ~c)))))
+                        `(~cast (~f ~@psyms (~get ~(type-hinted type-hint '_data) ~c)))
+                        `(~f ~@psyms (~get ~(type-hinted type-hint '_data) ~c)))))
              _#)
            (~'update-at-safe
-             [_# [~@psyms :as ~p] ~f]
+             [_# ~@psyms ~f]
              ~(with-bounds-check dim psyms shapes clj?
-                `(let [~c (int ~idx-syms)]
+                `(let [~c ~idx-syms]
                    (~set ~(type-hinted type-hint '_data) ~c
                          ~(if cast
-                            `(~cast (~f ~p (~get ~(type-hinted type-hint '_data) ~c)))
-                            `(~f ~c (~get ~(type-hinted type-hint '_data) ~c))))))
+                            `(~cast (~f ~@psyms (~get ~(type-hinted type-hint '_data) ~c)))
+                            `(~f ~@psyms (~get ~(type-hinted type-hint '_data) ~c))))))
              _#)
            (~'update-at-index
              [_# ~c ~f]
@@ -226,14 +247,14 @@
                       `(~cast (~f ~c (~get ~(type-hinted type-hint '_data) ~c)))
                       `(~f ~c (~get ~(type-hinted type-hint '_data) ~c))))
              _#)
-           (~'hi
-             [_# [~@psyms]]
+           (~'truncate-h
+             [_# ~@psyms]
              (new ~type-name ~'_data ~'_offset ~@strides
                   ~@(map
                      #(list 'if `(neg? ~(->p %)) (->sh %) `(int ~(->p %)))
                      rdim)))
-           (~'lo
-             [_# [~@psyms]]
+           (~'truncate-l
+             [_# ~@psyms]
              (let [~@(mapcat
                       #(list
                         [(->a %) (->b %)]
@@ -245,7 +266,7 @@
                    ~o (+ ~@(->> rdim (map ->b) (cons '_offset) (pair-fn '+)))]
                (new ~type-name ~'_data ~o ~@strides ~@asyms)))
            (~'transpose
-             [_# [~@psyms]]
+             [_# ~@psyms]
              (let [~@(mapcat #(list (->p %) `(if ~(->p %) (int ~(->p %)) ~%)) rdim)
                    ~c [~@strides]
                    ~d [~@shapes]]
@@ -253,7 +274,7 @@
                     ~@(map #(list c (->p %)) rdim)
                     ~@(map #(list d (->p %)) rdim))))
            (~'step
-             [_# [~@psyms]]
+             [_# ~@psyms]
              (let [~o ~'_offset
                    ~@(mapcat
                       #(let [stride' `(* ~(->st %) (int ~(->p %)))]
@@ -271,7 +292,7 @@
                       rdim)]
                (new ~type-name ~'_data ~o ~@bsyms ~@asyms)))
            (~'pick
-             [_# [~@psyms]]
+             [_# ~@psyms]
              (let [~o ~'_offset, ~c [], ~d []
                    ~@(mapcat
                       #(list

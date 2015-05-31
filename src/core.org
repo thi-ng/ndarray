@@ -96,6 +96,9 @@ efficiently.
 ** NDArray generator macro
 
 #+BEGIN_SRC clojure :noweb-ref macros
+  (defn- type-hinted
+    [type x] (if type (with-meta x {:tag (name type)}) x))
+
   (defn- make-symbols
     [id n] (mapv #(symbol (str id %)) (range n)))
 
@@ -133,23 +136,20 @@ efficiently.
              (str "Invalid index: " (pr-str [~@psyms]))))))
 
   (defn- inject-clj-protos
-    [clj? get ->a ->sh idx rdim]
+    [clj? get data ->a ->sh idx rdim]
     (if clj?
       (list
        'clojure.lang.Seqable
        `(~'seq
          [_#]
          (for [~@(mapcat #(vector (->a %) `(range ~(->sh %))) rdim)]
-           (~get ~'_data ~idx))))
+           (~get ~data ~idx))))
       (list
        'ISeqable
        `(~'-seq
          [_#]
          (for [~@(mapcat #(vector (->a %) `(range ~(->sh %))) rdim)]
-           (~get ~'_data ~idx))))))
-
-  (defn type-hinted
-    [type x] (if type (with-meta x {:tag (name type)}) x))
+           (~get ~data ~idx))))))
 
   (defmacro def-ndarray
     [dim cast type-hint type-id data-ctor get set & [clj?]]
@@ -164,14 +164,15 @@ efficiently.
           [c d f p o] (repeatedly gensym)
           idx       (make-indexer dim ->st p)
           idx-syms  (make-indexer-syms dim ->st ->p)
+          data      (type-hinted type-hint '_data)
           rdim      (range dim)]
       `(do
          (deftype ~type-name
-             [~(type-hinted type-hint '_data) ~'_offset ~@strides ~@shapes]
-           ~@(inject-clj-protos clj? get ->a ->sh (make-indexer-syms dim ->st ->a) rdim)
+             [~data ~'_offset ~@strides ~@shapes]
+           ~@(inject-clj-protos clj? get data ->a ->sh (make-indexer-syms dim ->st ->a) rdim)
            ~'PNDArray
            (~'data
-             [_#] ~'_data)
+             [_#] ~data)
            (~'data-type
              [_#] ~type-id)
            (~'dimension
@@ -188,11 +189,12 @@ efficiently.
              [_# ~p]
              (let [~p (int ~p)
                    ~c (- ~p ~'_offset)
-                   ~@(mapcat
-                      #(list
-                        (->a %) `(int (/ ~c ~(->st %)))
-                        c `(- ~c (* ~(->a %) ~(->st %))))
-                      rdim)]
+                   ~@(drop-last
+                      2 (mapcat
+                         #(list
+                           (->a %) `(int (/ ~c ~(->st %)))
+                           c `(- ~c (* ~(->a %) ~(->st %))))
+                         rdim))]
                [~@asyms]))
            (~'index-seq
              [_#]
@@ -204,52 +206,52 @@ efficiently.
                [~@asyms]))
            (~'get-at
              [_# ~@psyms]
-             (~get ~(type-hinted type-hint '_data) (int ~idx-syms)))
+             (~get ~data ~idx-syms))
            (~'get-at-safe
              [_# ~@psyms]
              ~(with-bounds-check dim psyms shapes clj?
-                `(~get ~(type-hinted type-hint '_data) (int ~idx-syms))))
+                `(~get ~data ~idx-syms)))
            (~'get-at-index
              [_# i#]
-             (~get ~(type-hinted type-hint '_data) (int i#)))
+             (~get ~data (int i#)))
            (~'set-at
              [_# ~@psyms ~c]
-             (~set ~(type-hinted type-hint '_data) (int ~idx-syms) ~(if cast `(~cast ~c) c)) _#)
+             (~set ~data ~idx-syms ~(if cast `(~cast ~c) c)) _#)
            (~'set-at-safe
              [_# ~@psyms ~c]
              ~(with-bounds-check dim psyms shapes clj?
-                `(~set ~(type-hinted type-hint '_data) (int ~idx-syms) ~(if cast `(~cast ~c) c)))
+                `(~set ~data ~idx-syms ~(if cast `(~cast ~c) c)))
              _#)
            (~'set-at-index
              [_# i# ~c]
-             (~set ~(type-hinted type-hint '_data) (int i#) ~(if cast `(~cast ~c) c)) _#)
+             (~set ~data (int i#) ~(if cast `(~cast ~c) c)) _#)
            (~'update-at
              [_# ~@psyms ~f]
-             (let [~c (int ~idx-syms)]
-               (~set ~(type-hinted type-hint '_data) ~c
+             (let [~c ~idx-syms]
+               (~set ~data ~c
                      ~(if cast
-                        `(~cast (~f ~@psyms (~get ~(type-hinted type-hint '_data) ~c)))
-                        `(~f ~@psyms (~get ~(type-hinted type-hint '_data) ~c)))))
+                        `(~cast (~f ~@psyms (~get ~data ~c)))
+                        `(~f ~@psyms (~get ~data ~c)))))
              _#)
            (~'update-at-safe
              [_# ~@psyms ~f]
              ~(with-bounds-check dim psyms shapes clj?
                 `(let [~c ~idx-syms]
-                   (~set ~(type-hinted type-hint '_data) ~c
+                   (~set ~data ~c
                          ~(if cast
-                            `(~cast (~f ~@psyms (~get ~(type-hinted type-hint '_data) ~c)))
-                            `(~f ~@psyms (~get ~(type-hinted type-hint '_data) ~c))))))
+                            `(~cast (~f ~@psyms (~get ~data ~c)))
+                            `(~f ~@psyms (~get ~data ~c))))))
              _#)
            (~'update-at-index
              [_# ~c ~f]
-             (~set ~(type-hinted type-hint '_data) ~c
+             (~set ~data ~c
                    ~(if cast
-                      `(~cast (~f ~c (~get ~(type-hinted type-hint '_data) ~c)))
-                      `(~f ~c (~get ~(type-hinted type-hint '_data) ~c))))
+                      `(~cast (~f ~c (~get ~data ~c)))
+                      `(~f ~c (~get ~data ~c))))
              _#)
            (~'truncate-h
              [_# ~@psyms]
-             (new ~type-name ~'_data ~'_offset ~@strides
+             (new ~type-name ~data ~'_offset ~@strides
                   ~@(map
                      #(list 'if `(neg? ~(->p %)) (->sh %) `(int ~(->p %)))
                      rdim)))
@@ -264,13 +266,13 @@ efficiently.
                            [~(->sh %) 0]))
                       rdim)
                    ~o (+ ~@(->> rdim (map ->b) (cons '_offset) (pair-fn '+)))]
-               (new ~type-name ~'_data ~o ~@strides ~@asyms)))
+               (new ~type-name ~data ~o ~@strides ~@asyms)))
            (~'transpose
              [_# ~@psyms]
              (let [~@(mapcat #(list (->p %) `(if ~(->p %) (int ~(->p %)) ~%)) rdim)
                    ~c [~@strides]
                    ~d [~@shapes]]
-               (new ~type-name ~'_data ~'_offset
+               (new ~type-name ~data ~'_offset
                     ~@(map #(list c (->p %)) rdim)
                     ~@(map #(list d (->p %)) rdim))))
            (~'step
@@ -290,7 +292,7 @@ efficiently.
                                 ~o])
                              [~(->sh %) ~(->st %) ~o])))
                       rdim)]
-               (new ~type-name ~'_data ~o ~@bsyms ~@asyms)))
+               (new ~type-name ~data ~o ~@bsyms ~@asyms)))
            (~'pick
              [_# ~@psyms]
              (let [~o ~'_offset, ~c [], ~d []
@@ -303,14 +305,14 @@ efficiently.
                       rdim)
                    cnt# (count ~c)]
                (if (pos? cnt#)
-                 ((get-in @~'ctor-registry [cnt# ~type-id :ctor]) ~'_data ~o ~d ~c)
-                 (~get ~(type-hinted type-hint '_data) ~o))))
+                 ((get-in @~'ctor-registry [cnt# ~type-id :ctor]) ~data ~o ~d ~c)
+                 (~get ~data ~o))))
            ~'Object
            (~'toString
              [_#]
              (pr-str
-              {:data ~'_data :type ~type-id
-               :size (* ~@shapes) :total (count ~'_data) :offset ~'_offset
+              {:data ~data :type ~type-id
+               :size (* ~@shapes) :total (count ~data) :offset ~'_offset
                :shape [~@shapes] :stride [~@strides]})))
 
          (defn ~(with-meta raw-name {:export true})

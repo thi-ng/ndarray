@@ -183,7 +183,7 @@ A slightly larger example to demonstrate connected component queries on a graph:
 ** Injected properties                                             :noexport:
 
 #+BEGIN_SRC clojure :noweb-ref version
-0.1.0
+0.2.0-SNAPSHOT
 #+END_SRC
 #+BEGIN_SRC clojure :exports none :noweb-ref project-url
 http://thi.ng/ndarray
@@ -200,11 +200,15 @@ target/ndarray-<<version>>.js
 #+END_SRC
 **** [[https://github.com/clojure/clojurescript][ClojureScript]]
 #+BEGIN_SRC clojure :noweb-ref dep-cljs
-[org.clojure/clojurescript "0.0-3297"]
+[org.clojure/clojurescript "0.0-3308"]
 #+END_SRC
 **** [[http://thi.ng/typedarrays][thi.ng/typedarrays]]
 #+BEGIN_SRC clojure :noweb-ref dep-arrays
 [thi.ng/typedarrays "0.1.1"]
+#+END_SRC
+**** [[http://thi.ng/math][thi.ng/math]]
+#+BEGIN_SRC clojure :noweb-ref dep-math
+[thi.ng/math "0.1.2"]
 #+END_SRC
 *** Development
 **** [[https://github.com/cemerick/clojurescript.test][clojurescript.test]]
@@ -228,7 +232,7 @@ target/ndarray-<<version>>.js
 ** Leiningen coordinates
 
 #+BEGIN_SRC clojure :noweb yes :noweb-ref lein-coords
-  [thi.ng/ndarray "0.1.0"]
+  [thi.ng/ndarray "0.2.0-SNAPSHOT"]
 #+END_SRC
 
 ** Building this project
@@ -287,7 +291,8 @@ browser.
 
     :dependencies [<<dep-clj>>
                    <<dep-cljs>>
-                   <<dep-arrays>>]
+                   <<dep-arrays>>
+                   <<dep-math>>]
 
     :plugins      [<<dep-autotest>>]
 

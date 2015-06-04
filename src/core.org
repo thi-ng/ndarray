@@ -7,6 +7,7 @@
          - [[#supported-type-ids][Supported type IDs]]
          - [[#implementations][Implementations]]
      - [[#ndarray-generator-macro--registry][NDArray generator macro & registry]]
+     - [[#padded-array-wrapper][Padded array wrapper]]
      - [[#helper-functions][Helper functions]]
      - [[#complete-namespace-definitions][Complete namespace definitions]]
 
@@ -42,6 +43,10 @@ See [[./index.org][index.org]] for further usage example of some of these operat
       "Returns a vector of the ndarray's strides in each dimension.")
     (offset [_]
       "Returns the ndarray view's start index in the backing data array")
+    (extract [_]
+      "Creates a new backing array of only values in given ndarray view
+      and returns new ndarray of same shape, but with strides reset to
+      defaults order.")
     (index-at [_ x] [_ x y] [_ x y z] [_ x y z w]
       "Returns the global index into the backing array for given
       position in an ndarray view.")
@@ -236,8 +241,8 @@ availability in Clojure & Clojurescript.
        ))
 
   (defn ndarray
-    ([data shape]
-     (ndarray ::generic data shape))
+    ([type data]
+     (ndarray type data [(count data)]))
     ([type data shape]
      (let [{:keys [ctor data-ctor]} (get-in @ctor-registry [(count shape) type])]
        (if ctor
@@ -288,9 +293,13 @@ implementation for the given arguments.
                (cons '_offset)
                (pair-fn '+))))
 
+  (defmacro and*
+    ([x] x)
+    ([x & next] `(if ~x (and* ~@next))))
+
   (defn- with-bounds-check
     [dim psyms shapes clj? & body]
-    `(if (and
+    `(if (and*
           ~@(mapcat
              #(list `(>= ~(symbol (psyms %)) 0)
                     `(< ~(symbol (psyms %)) ~(symbol (shapes %))))
@@ -352,6 +361,17 @@ implementation for the given arguments.
              [_#] [~@shapes])
            (~'offset
              [_#] ~'_offset)
+	   (~'extract
+	     [_#]
+	     (let [buf#      ~(type-hinted type-hint `(~data-ctor (* ~@(pair-fn '* shapes))))
+		   [~@asyms] (thi.ng.ndarray.core/shape->stride [~@shapes])
+		   arr#      (new ~type-name buf# 0 ~@asyms ~@shapes)]
+	       (loop [~c (thi.ng.ndarray.core/index-seq _#)
+		      ~d (thi.ng.ndarray.core/index-seq arr#)]
+		 (when ~c
+		   (~set buf# (int (first ~d)) ~(do-cast cast `(~get ~data (first ~c))))
+		   (recur (next ~c) (next ~d))))
+	       arr#))
            (~'index-at
              [_# ~@psyms] ~idx-syms)
            (~'index-pos
@@ -506,14 +526,17 @@ implementation for the given arguments.
 
 #+BEGIN_SRC clojure :tangle ../babel/src/thi/ng/ndarray/core.cljc :noweb yes :mkdirp yes :padline no
   (ns thi.ng.ndarray.core
-    #?@(:clj
-        [(:require
-          [thi.ng.ndarray.macros :refer [def-ndarray]])]
-        :cljs
-        [(:require-macros
-          [thi.ng.ndarray.macros :refer [def-ndarray]])
-         (:require
-          [thi.ng.typedarrays.core :as a])]))
+    #?(:cljs
+       (:require-macros
+	[thi.ng.math.macros :as mm]
+	[thi.ng.ndarray.macros :refer [def-ndarray]]))
+    (:require
+     #?@(:clj
+	 [[thi.ng.math.macros :as mm]
+	  [thi.ng.ndarray.macros :refer [def-ndarray]]]
+	 :cljs
+	 [[thi.ng.typedarrays.core :as a]])
+     [thi.ng.math.core :as m]))
 
   <<api>>
 

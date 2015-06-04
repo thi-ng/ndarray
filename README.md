@@ -1,5 +1,7 @@
 # thi.ng/ndarray
 
+![2d contour lines example](assets/noise-res128.jpg)
+
 This library is a Clojure/Clojurescript port of Mikola Lysenko's
 [ndarray core](https://github.com/scijs/ndarray) JS library with
 extended features, to make more sense in a Clojure context.

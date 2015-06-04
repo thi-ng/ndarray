@@ -204,7 +204,7 @@ target/ndarray-<<version>>.js
 #+END_SRC
 **** [[http://thi.ng/typedarrays][thi.ng/typedarrays]]
 #+BEGIN_SRC clojure :noweb-ref dep-arrays
-[thi.ng/typedarrays "0.1.1"]
+[thi.ng/typedarrays "0.1.2"]
 #+END_SRC
 **** [[http://thi.ng/math][thi.ng/math]]
 #+BEGIN_SRC clojure :noweb-ref dep-math

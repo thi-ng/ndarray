@@ -7,7 +7,6 @@
          - [[#supported-type-ids][Supported type IDs]]
          - [[#implementations][Implementations]]
      - [[#ndarray-generator-macro--registry][NDArray generator macro & registry]]
-     - [[#padded-array-wrapper][Padded array wrapper]]
      - [[#helper-functions][Helper functions]]
      - [[#complete-namespace-definitions][Complete namespace definitions]]
 
@@ -43,6 +42,8 @@ See [[./index.org][index.org]] for further usage example of some of these operat
       "Returns a vector of the ndarray's strides in each dimension.")
     (offset [_]
       "Returns the ndarray view's start index in the backing data array")
+    (size [_]
+      "Returns the element count of an ndarray view")
     (extract [_]
       "Creates a new backing array of only values in given ndarray view
       and returns new ndarray of same shape, but with strides reset to
@@ -90,7 +91,8 @@ See [[./index.org][index.org]] for further usage example of some of these operat
     (truncate-h [_ x] [_ x y] [_ x y z] [_ x y z w]
       "Returns a new ndarray of same type with its shape truncated at
       top end. Negative args are considered offsets from current shape.
-      Does not mutate backing array.")
+      nil values keep shape in that dimension. Does not mutate backing
+      array.")
     (truncate-l [_ x] [_ x y] [_ x y z] [_ x y z w]
       "Returns a new ndarray of same type with its shape truncated at
       lower end, effectively shifting its start index/offset towards the
@@ -294,20 +296,27 @@ implementation for the given arguments.
                (pair-fn '+))))
 
   (defmacro and*
+    "Like clojure.core/and, but avoids intermediate let bindings and
+    only ever returns either result of last form (if all previous
+    succeeded) or nil."
     ([x] x)
-    ([x & next] `(if ~x (and* ~@next))))
+    ([x & more] `(if ~x (and* ~@more))))
 
   (defn- with-bounds-check
     [dim psyms shapes clj? & body]
     `(if (and*
           ~@(mapcat
-             #(list `(>= ~(symbol (psyms %)) 0)
-                    `(< ~(symbol (psyms %)) ~(symbol (shapes %))))
+             #(let [p (symbol (psyms %))]
+                (list `(>= ~p 0) `(< ~p ~(symbol (shapes %)))))
              (range dim)))
        (do ~@body)
        (throw
         (new ~(if clj? 'IndexOutOfBoundsException 'js/Error)
              (str "Invalid index: " (pr-str [~@psyms]))))))
+
+  (defn- for*
+    [->a ->sh rdim body]
+    `(for [~@(mapcat #(vector (->a %) `(range ~(->sh %))) rdim)] ~body))
 
   (defn- inject-clj-protos
     [clj? get data ->a ->sh idx rdim]
@@ -316,14 +325,12 @@ implementation for the given arguments.
        'clojure.lang.Seqable
        `(~'seq
          [_#]
-         (for [~@(mapcat #(vector (->a %) `(range ~(->sh %))) rdim)]
-           (~get ~data ~idx))))
+         ~(for* ->a ->sh rdim `(~get ~data ~idx))))
       (list
        'ISeqable
        `(~'-seq
          [_#]
-         (for [~@(mapcat #(vector (->a %) `(range ~(->sh %))) rdim)]
-           (~get ~data ~idx))))))
+         ~(for* ->a ->sh rdim `(~get ~data ~idx))))))
 
   (defn- do-cast
     [cast body]
@@ -361,17 +368,19 @@ implementation for the given arguments.
              [_#] [~@shapes])
            (~'offset
              [_#] ~'_offset)
-	   (~'extract
-	     [_#]
-	     (let [buf#      ~(type-hinted type-hint `(~data-ctor (* ~@(pair-fn '* shapes))))
-		   [~@asyms] (thi.ng.ndarray.core/shape->stride [~@shapes])
-		   arr#      (new ~type-name buf# 0 ~@asyms ~@shapes)]
-	       (loop [~c (thi.ng.ndarray.core/index-seq _#)
-		      ~d (thi.ng.ndarray.core/index-seq arr#)]
-		 (when ~c
-		   (~set buf# (int (first ~d)) ~(do-cast cast `(~get ~data (first ~c))))
-		   (recur (next ~c) (next ~d))))
-	       arr#))
+           (~'size
+             [_#] (* ~@(pair-fn '* shapes)))
+           (~'extract
+             [_#]
+             (let [buf#      ~(type-hinted type-hint `(~data-ctor (* ~@(pair-fn '* shapes))))
+                   [~@asyms] (thi.ng.ndarray.core/shape->stride [~@shapes])
+                   arr#      (new ~type-name buf# 0 ~@asyms ~@shapes)]
+               (loop [~c (thi.ng.ndarray.core/index-seq _#)
+                      ~d (thi.ng.ndarray.core/index-seq arr#)]
+                 (when ~c
+                   (~set buf# (int (first ~d)) ~(do-cast cast `(~get ~data (first ~c))))
+                   (recur (next ~c) (next ~d))))
+               arr#))
            (~'index-at
              [_# ~@psyms] ~idx-syms)
            (~'index-pos
@@ -387,33 +396,27 @@ implementation for the given arguments.
                [~@asyms]))
            (~'index-seq
              [_#]
-             (for [~@(mapcat #(vector (->a %) `(range ~(->sh %))) rdim)]
-               ~(make-indexer-syms dim ->st ->a)))
+             ~(let [idx (make-indexer-syms dim ->st ->a)]
+                (for* ->a ->sh rdim idx)))
            (~'position-seq
-             [_#]
-             (for [~@(mapcat #(vector (->a %) `(range ~(->sh %))) rdim)]
-               [~@asyms]))
+             [_#] ~(for* ->a ->sh rdim `[~@asyms]))
            (~'get-at
-             [_# ~@psyms]
-             (~get ~data ~idx-syms))
+             [_# ~@psyms] (~get ~data ~idx-syms))
            (~'get-at-safe
              [_# ~@psyms]
              ~(with-bounds-check dim psyms shapes clj?
                 `(~get ~data ~idx-syms)))
            (~'get-at-index
-             [_# i#]
-             (~get ~data (int i#)))
+             [_# i#] (~get ~data (int i#)))
            (~'set-at
-             [_# ~@psyms ~c]
-             (~set ~data ~idx-syms ~(do-cast cast c)) _#)
+             [_# ~@psyms ~c] (~set ~data ~idx-syms ~(do-cast cast c)) _#)
            (~'set-at-safe
              [_# ~@psyms ~c]
              ~(with-bounds-check dim psyms shapes clj?
                 `(~set ~data ~idx-syms ~(do-cast cast c)))
              _#)
            (~'set-at-index
-             [_# i# ~c]
-             (~set ~data (int i#) ~(do-cast cast c)) _#)
+             [_# i# ~c] (~set ~data (int i#) ~(do-cast cast c)) _#)
            (~'update-at
              [_# ~@psyms ~f]
              (let [~c ~idx-syms]
@@ -426,15 +429,17 @@ implementation for the given arguments.
                    (~set ~data ~c ~(do-cast cast `(~f ~@psyms (~get ~data ~c))))))
              _#)
            (~'update-at-index
-             [_# ~c ~f]
-             (~set ~data ~c
-                   ~(do-cast cast `(~f ~c (~get ~data ~c))))
-             _#)
+             [_# ~c ~f] (~set ~data ~c ~(do-cast cast `(~f ~c (~get ~data ~c)))) _#)
            (~'truncate-h
              [_# ~@psyms]
              (new ~type-name ~data ~'_offset ~@strides
                   ~@(map
-                     #(list 'if `(neg? ~(->p %)) (->sh %) `(int ~(->p %)))
+                     #(let [p (->p %) s (->sh %)]
+                        `(if (number? ~p)
+                           (if (neg? ~p)
+                             (+ ~s (int ~p))
+                             (int ~p))
+                           ~s))
                      rdim)))
            (~'truncate-l
              [_# ~@psyms]
@@ -493,7 +498,7 @@ implementation for the given arguments.
              [_#]
              (pr-str
               {:data ~data :type ~type-id
-               :size (* ~@shapes) :total (count ~data) :offset ~'_offset
+               :size (* ~@(pair-fn '* shapes)) :total (count ~data) :offset ~'_offset
                :shape [~@shapes] :stride [~@strides]})))
 
          (defn ~(with-meta raw-name {:export true})

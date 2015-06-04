@@ -173,6 +173,7 @@ A slightly larger example to demonstrate connected component queries on a graph:
 * Namespaces
 
 - [[./core.org][thi.ng.ndarray.core]]
+- [[./contours.org][thi.ng.ndarray.contours]]
 
 * Tests
 

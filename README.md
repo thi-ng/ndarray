@@ -11,3 +11,9 @@ Please see [index.org](src/index.org) for further information & examples.
 ```clj
 [thi.ng/ndarray "0.1.0"]
 ```
+or
+
+```clj
+[thi.ng/ndarray "0.2.0-SNAPSHOT"]
+```
+

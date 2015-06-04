@@ -1,4 +1,4 @@
-#+SETUPFILE setup.org
+#+SETUPFILE: setup.org
 
 * Contents                                                         :toc_3_gh:
  - [[#namespace-thingndarraycontours][Namespace: thi.ng.ndarray.contours]]

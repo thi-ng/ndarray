@@ -2,130 +2,24 @@
 
 * Contents                                                         :toc_3_gh:
  - [[#namespace-thingndarraycontours][Namespace: thi.ng.ndarray.contours]]
-     - [[#level-crossings][Level crossings]]
+     - [[#2d-contour-extraction][2D contour extraction]]
          - [[#examples][Examples]]
          - [[#implementation][Implementation]]
-     - [[#2d-contour-extraction][2D contour extraction]]
+     - [[#level-crossings][Level crossings]]
          - [[#examples][Examples]]
          - [[#implementation][Implementation]]
      - [[#complete-namespace-definition][Complete namespace definition]]
 
 * Namespace: thi.ng.ndarray.contours
 
-** Level crossings
-
-This section contains high level operations to find level crossings in
-1D, 2D and 3D ndarrays. The functions all take an ndarray and contour
-level value and assume the array to be in major shape order (the
-default order), i.e. in 2D row-major (YX), in 3D slice-row-major
-(ZYX). The functions return interpolated grid positions where the
-given contour level is crossed between cells.
-
-*** Examples
-
-#+BEGIN_SRC clojure
-  (level-crossings1d (nd/ndarray :float32 [0 0 1 0]) 4 0.25)
-  ;; (1.25 2.75)
-
-  (let [a [0 0 0
-           0 1 0
-           0 0 0]
-        a (nd/ndarray :float32 a [3 3])]
-    {:x   (level-crossings2d-x a 0.25)
-     :y   (level-crossings2d-y a 0.25)
-     :all (level-crossings2d a 0.25)})
-  ;; {:x ([1 0.25] [1 1.75])
-  ;;  :y ([0.25 1] [1.75 1])
-  ;;  :all ([1 0.25] [1 1.75] [0.25 1] [1.75 1])}
-
-  (let [a (nd/ndarray :float32 (float-array 27) [3 3 3])]
-    (nd/set-at a 1 1 1 1)
-    {:x (level-crossings3d-x a 0.25)
-     :y (level-crossings3d-y a 0.25)
-     :z (level-crossings3d-z a 0.25)
-     :all (level-crossings3d a 0.25)})
-  ;; {:x ((1 1 0.25) (1 1 1.75))
-  ;;  :y ((1 0.25 1) (1 1.75 1))
-  ;;  :z ([0.25 1 1] [1.75 1 1])
-  ;;  :all ((1 1 0.25) (1 1 1.75) (1 0.25 1) (1 1.75 1) [0.25 1 1] [1.75 1 1])}
-#+END_SRC
-
-*** Implementation
-
-#+BEGIN_SRC clojure :noweb-ref level-crossings
-  (defn level-crossing
-    [offset a b level]
-    (let [da (- a level)
-          db (- b level)]
-      (if-not (= (>= da 0.0) (>= db 0.0))
-        (+ offset (+ 0.5 (* 0.5 (/ (+ da db) (- da db))))))))
-
-  (defn level-crossings1d
-    [mat shape level]
-    (for [x (range (dec (if (number? shape) shape (first shape))))
-          :let [x' (level-crossing x (nd/get-at mat x) (nd/get-at mat (inc x)) level)]
-          :when x']
-      x'))
-
-  (defn level-crossings2d-x
-    ([mat level]
-     (level-crossings2d-x mat (nd/shape mat) level))
-    ([mat [sy sx] level]
-     (mapcat
-      (fn [y] (map #(vector y %) (level-crossings1d (nd/pick mat y nil) sx level)))
-      (range sy))))
-
-  (defn level-crossings2d-y
-    ([mat level]
-     (level-crossings2d-y mat (nd/shape mat) level))
-    ([mat [sy sx] level]
-     (mapcat
-      (fn [x] (map #(vector % x) (level-crossings1d (nd/pick mat nil x) sy level)))
-      (range sx))))
-
-  (defn level-crossings2d
-    ([mat level]
-     (level-crossings2d mat (nd/shape mat) level))
-    ([mat shape level]
-     (concat
-      (level-crossings2d-x mat shape level)
-      (level-crossings2d-y mat shape level))))
-
-  (defn level-crossings3d-x
-    ([mat level]
-     (level-crossings3d-x mat (nd/shape mat) level))
-    ([mat [sz sy sx] level]
-     (mapcat
-      (fn [z] (map #(cons z %) (level-crossings2d-x (nd/pick mat z nil nil) [sy sx] level)))
-      (range sz))))
-
-  (defn level-crossings3d-y
-    ([mat level]
-     (level-crossings3d-y mat (nd/shape mat) level))
-    ([mat [sz sy sx] level]
-     (mapcat
-      (fn [z] (map #(cons z %) (level-crossings2d-y (nd/pick mat z nil nil) [sy sx] level)))
-      (range sz))))
-
-  (defn level-crossings3d-z
-    ([mat level]
-     (level-crossings3d-z mat (nd/shape mat) level))
-    ([mat [sz sy sx] level]
-     (mapcat
-      (fn [x] (map #(conj % x) (level-crossings2d-y (nd/pick mat nil nil x) [sz sy] level)))
-      (range sx))))
-
-  (defn level-crossings3d
-    ([mat level]
-     (level-crossings3d mat (nd/shape mat) level))
-    ([mat shape level]
-     (concat
-      (level-crossings3d-x mat shape level)
-      (level-crossings3d-y mat shape level)
-      (level-crossings3d-z mat shape level))))
-#+END_SRC
-
 ** 2D contour extraction
+
+This section implements the =find-contours2d= function, which accepts
+a 2D ndarray and a scalar. It computes a list of point sequences
+representing all interpolated level crossings for the given value.
+These contour lines can then be further processed or visualized, as
+shown in the example below...
+
 *** Examples
 
 The following demo utilizes thi.ng/geom, thi.ng/math and thi.ng/color
@@ -145,12 +39,14 @@ the resulting visualizations.
 **** Simplex noise
 
 | [[../assets/noise-res32.jpg]] | [[../assets/noise-res64.jpg]] | [[../assets/noise-res128.jpg]] |
-| 32 x 32                   | 64 x 64                   | 128 x 128                 |
+| 32 x 32                   | 64 x 64                   | 128 x 128                  |
+| 8916 vertices             | 19172 vertices            | 39702 vertices             |
 
 **** Radial distance (modulated)
 
 | [[../assets/circle-res32.jpg]] | [[../assets/circle-res64.jpg]] | [[../assets/circle-res128.jpg]] |
 | 32 x 32                    | 64 x 64                    | 128 x 128                   |
+| 7020 vertices              | 14652 vertices             | 29874 vertices              |
 
 **** Demo code
 
@@ -225,8 +121,9 @@ the resulting visualizations.
      ;;[0.5 0.5 0.5] [0.5 0.5 0.5] [1.0 1.0 0.5] [0.8 0.9 0.3]
      num-contours))
 
+  ;; choose one...
   (def mat (noise-matrix res n-scale))
-  (def mat (circle-matrix res 8 0.25))
+  ;;(def mat (circle-matrix res 8 0.25))
 
   (->> (m/norm-range num-contours)
        (rest)
@@ -367,6 +264,123 @@ Loosely based on Marching Squares/Cubes implementations by Paul Bourke (C) & Mur
                     (recur (next pos) (conj curr vertex) to [(+ y oy) (+ x ox)]))
                   (recur (next pos) curr to nil)))))
           (conj @contours curr)))))
+#+END_SRC
+
+** Level crossings
+
+This section contains somewhat less high level operations to find
+level crossings in 1D, 2D and 3D ndarrays. Unlike the contour line
+extraction above, which procudes a logical sequence of connected
+points/segments/facets in the grid, these functions here merely
+produce a sequence of (potentially) unconnected cell positions and are
+intended for more analytical use cases. The functions all take an
+ndarray and contour level value and assume the array to be in major
+shape order (the default order), i.e. in 2D row-major (YX), in 3D
+slice-row-major (ZYX). The functions return interpolated grid
+positions where the given contour level is crossed between cells.
+
+*** Examples
+
+#+BEGIN_SRC clojure
+  (level-crossings1d (nd/ndarray :float32 [0 0 1 0]) 4 0.25)
+  ;; (1.25 2.75)
+
+  (let [a [0 0 0
+           0 1 0
+           0 0 0]
+        a (nd/ndarray :float32 a [3 3])]
+    {:x   (level-crossings2d-x a 0.25)
+     :y   (level-crossings2d-y a 0.25)
+     :all (level-crossings2d a 0.25)})
+  ;; {:x ([1 0.25] [1 1.75])
+  ;;  :y ([0.25 1] [1.75 1])
+  ;;  :all ([1 0.25] [1 1.75] [0.25 1] [1.75 1])}
+
+  (let [a (nd/ndarray :float32 (float-array 27) [3 3 3])]
+    (nd/set-at a 1 1 1 1)
+    {:x (level-crossings3d-x a 0.25)
+     :y (level-crossings3d-y a 0.25)
+     :z (level-crossings3d-z a 0.25)
+     :all (level-crossings3d a 0.25)})
+  ;; {:x ((1 1 0.25) (1 1 1.75))
+  ;;  :y ((1 0.25 1) (1 1.75 1))
+  ;;  :z ([0.25 1 1] [1.75 1 1])
+  ;;  :all ((1 1 0.25) (1 1 1.75) (1 0.25 1) (1 1.75 1) [0.25 1 1] [1.75 1 1])}
+#+END_SRC
+
+*** Implementation
+
+#+BEGIN_SRC clojure :noweb-ref level-crossings
+  (defn level-crossing
+    [offset a b level]
+    (let [da (- a level)
+          db (- b level)]
+      (if-not (= (>= da 0.0) (>= db 0.0))
+        (+ offset (+ 0.5 (* 0.5 (/ (+ da db) (- da db))))))))
+
+  (defn level-crossings1d
+    [mat shape level]
+    (for [x (range (dec (if (number? shape) shape (first shape))))
+          :let [x' (level-crossing x (nd/get-at mat x) (nd/get-at mat (inc x)) level)]
+          :when x']
+      x'))
+
+  (defn level-crossings2d-x
+    ([mat level]
+     (level-crossings2d-x mat (nd/shape mat) level))
+    ([mat [sy sx] level]
+     (mapcat
+      (fn [y] (map #(vector y %) (level-crossings1d (nd/pick mat y nil) sx level)))
+      (range sy))))
+
+  (defn level-crossings2d-y
+    ([mat level]
+     (level-crossings2d-y mat (nd/shape mat) level))
+    ([mat [sy sx] level]
+     (mapcat
+      (fn [x] (map #(vector % x) (level-crossings1d (nd/pick mat nil x) sy level)))
+      (range sx))))
+
+  (defn level-crossings2d
+    ([mat level]
+     (level-crossings2d mat (nd/shape mat) level))
+    ([mat shape level]
+     (concat
+      (level-crossings2d-x mat shape level)
+      (level-crossings2d-y mat shape level))))
+
+  (defn level-crossings3d-x
+    ([mat level]
+     (level-crossings3d-x mat (nd/shape mat) level))
+    ([mat [sz sy sx] level]
+     (mapcat
+      (fn [z] (map #(cons z %) (level-crossings2d-x (nd/pick mat z nil nil) [sy sx] level)))
+      (range sz))))
+
+  (defn level-crossings3d-y
+    ([mat level]
+     (level-crossings3d-y mat (nd/shape mat) level))
+    ([mat [sz sy sx] level]
+     (mapcat
+      (fn [z] (map #(cons z %) (level-crossings2d-y (nd/pick mat z nil nil) [sy sx] level)))
+      (range sz))))
+
+  (defn level-crossings3d-z
+    ([mat level]
+     (level-crossings3d-z mat (nd/shape mat) level))
+    ([mat [sz sy sx] level]
+     (mapcat
+      (fn [x] (map #(conj % x) (level-crossings2d-y (nd/pick mat nil nil x) [sz sy] level)))
+      (range sx))))
+
+  (defn level-crossings3d
+    ([mat level]
+     (level-crossings3d mat (nd/shape mat) level))
+    ([mat shape level]
+     (concat
+      (level-crossings3d-x mat shape level)
+      (level-crossings3d-y mat shape level)
+      (level-crossings3d-z mat shape level))))
 #+END_SRC
 
 ** Complete namespace definition

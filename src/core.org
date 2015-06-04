@@ -171,7 +171,7 @@ availability in Clojure & Clojurescript.
        (def-ndarray 2 nil     nil        :generic to-array aget aset true)
        (def-ndarray 2 boolean "booleans" :boolean boolean-array aget aset-boolean true)
        (def-ndarray 2 byte    "bytes"    :int8    byte-array aget aset-byte true)
-       (def-ndarray 2 short   "shorts"   :int26   short-array aget aset-short true)
+       (def-ndarray 2 short   "shorts"   :int16   short-array aget aset-short true)
        (def-ndarray 2 int     "ints"     :int32   int-array aget aset-int true)
        (def-ndarray 2 long    "longs"    :int64   long-array aget aset-long true)
        (def-ndarray 2 float   "floats"   :float32 float-array aget aset-float true)
@@ -180,7 +180,7 @@ availability in Clojure & Clojurescript.
        (def-ndarray 3 nil     nil        :generic to-array aget aset true)
        (def-ndarray 3 boolean "booleans" :boolean boolean-array aget aset-boolean true)
        (def-ndarray 3 byte    "bytes"    :int8    byte-array aget aset-byte true)
-       (def-ndarray 3 short   "shorts"   :int36   short-array aget aset-short true)
+       (def-ndarray 3 short   "shorts"   :int16   short-array aget aset-short true)
        (def-ndarray 3 int     "ints"     :int32   int-array aget aset-int true)
        (def-ndarray 3 long    "longs"    :int64   long-array aget aset-long true)
        (def-ndarray 3 float   "floats"   :float32 float-array aget aset-float true)
@@ -189,7 +189,7 @@ availability in Clojure & Clojurescript.
        (def-ndarray 4 nil     nil        :generic to-array aget aset true)
        (def-ndarray 4 boolean "booleans" :boolean boolean-array aget aset-boolean true)
        (def-ndarray 4 byte    "bytes"    :int8    byte-array aget aset-byte true)
-       (def-ndarray 4 short   "shorts"   :int46   short-array aget aset-short true)
+       (def-ndarray 4 short   "shorts"   :int16   short-array aget aset-short true)
        (def-ndarray 4 int     "ints"     :int32   int-array aget aset-int true)
        (def-ndarray 4 long    "longs"    :int64   long-array aget aset-long true)
        (def-ndarray 4 float   "floats"   :float32 float-array aget aset-float true)
@@ -355,7 +355,7 @@ implementation for the given arguments.
          (deftype ~type-name
              [~data ~'_offset ~@strides ~@shapes]
            ~@(inject-clj-protos clj? get data ->a ->sh (make-indexer-syms dim ->st ->a) rdim)
-           ~'PNDArray
+           ~'thi.ng.ndarray.core/PNDArray
            (~'data
              [_#] ~data)
            (~'data-type

@@ -6,6 +6,8 @@
          - [[#examples][Examples]]
          - [[#implementation][Implementation]]
      - [[#2d-contour-extraction][2D contour extraction]]
+         - [[#examples][Examples]]
+         - [[#implementation][Implementation]]
      - [[#complete-namespace-definition][Complete namespace definition]]
 
 * Namespace: thi.ng.ndarray.contours
@@ -124,6 +126,129 @@ given contour level is crossed between cells.
 #+END_SRC
 
 ** 2D contour extraction
+*** Examples
+
+The following demo utilizes thi.ng/geom, thi.ng/math and thi.ng/color
+libs to create SVG based contour maps of generated dummy data. To try
+it out yourself, simply add the following dependency (in addition to
+this (ndarray) library) - geom itself depends on math & color so they
+don't need to be specified in your project:
+
+#+BEGIN_SRC clojure
+  [thi.ng/geom "0.0.815"]
+#+END_SRC
+
+These images were generated with the demo code below and show the
+impact of different matrix resolutions on the precision and quality of
+the resulting visualizations.
+
+**** Simplex noise
+
+| [[../assets/noise-res32.jpg]] | [[../assets/noise-res64.jpg]] | [[../assets/noise-res128.jpg]] |
+| 32 x 32                   | 64 x 64                   | 128 x 128                 |
+
+**** Radial distance (modulated)
+
+| [[../assets/circle-res32.jpg]] | [[../assets/circle-res64.jpg]] | [[../assets/circle-res128.jpg]] |
+| 32 x 32                    | 64 x 64                    | 128 x 128                   |
+
+**** Demo code
+
+#+BEGIN_SRC clojure
+  (require
+   '[thi.ng.ndarray.core :as nd]
+   '[thi.ng.ndarray.contours :as contours]
+   '[thi.ng.geom.core :as g]
+   '[thi.ng.geom.core.vector :as v]
+   '[thi.ng.geom.svg.core :as svg]
+   '[thi.ng.math.core :as m]
+   '[thi.ng.math.simplexnoise :as n]
+   '[thi.ng.color.core :as col])
+
+  (defn make-palette
+    "Cosine based RGB palette generation method by iq: http://v.gd/B2aySt"
+    [a b c d n]
+    (mapv
+     #(mapv
+       (fn [a b c d]
+         (+ a (* b (Math/cos (* m/TWO_PI (+ (* c %) d))))))
+       a b c d)
+     (m/norm-range n)))
+
+  (defn contour->svg
+    "Takes a single seq of contour coordinates and converts it into an
+    SVG polygon (hiccup format)."
+    [contour]
+    (-> (map #(-> % v/vec2 v/yx (g/scale scale)) contour)
+        (svg/polygon)))
+
+  (defn noise-matrix
+    "Creates a new 2D matrix of size res and populates it with simplex
+    noise, then sets border cells to 1.0 and returns matrix"
+    [res ns]
+    (let [mat (nd/ndarray :float32 (float-array (* res res)) [res res])]
+      (dorun
+       (for [[y x] (nd/position-seq mat)]
+         (nd/set-at mat x y (+ 0.5 (* 0.5 (n/noise2 (+ 101 (* x ns)) (* y ns)))))))
+      (contours/set-border2d mat 1)))
+
+  (defn circle-matrix
+    "Creates new 2D matrix of size res and populates it w/ modulated
+    normalized distance values from center. `spikes` arg is number of
+    oscillations used to modulate. `amp` is modulation strength. Sets
+    border cells to 1.0 and returns matrix."
+    [res spikes amp]
+    (let [mat (nd/ndarray :float32 (float-array (* res res)) [res res])
+          c (/ res 2.0)
+          dmax (* m/SQRT2 0.5 res)]
+      (dorun
+       (for [[y x] (nd/position-seq mat)
+             :let [dx (- c x)
+                   dy (- c y)
+                   t  (Math/atan2 dy dx)
+                   d  (Math/sqrt (* (+ 0.5 (* amp (Math/sin (* t spikes))))
+                                    (+ (* dx dx) (* dy dy))))]]
+         (nd/set-at mat x y (/ d dmax))))
+      (contours/set-border2d mat 1)))
+
+  (def res 128)
+  (def width 640.0)
+  (def scale (/ width (- res 2)))
+  (def clipped (- width (* 2.0 scale)))
+  (def n-scale 0.03)
+  (def num-contours 60)
+
+  (def palette
+    (make-palette
+     [0.5 0.5 0.5] [0.5 0.5 0.5] [1.0 1.0 1.0] [0 0.1 0.2]
+     ;;[0.5 0.5 0.5] [0.5 0.5 0.5] [1.0 1.0 1.0] [0 1/3 2/3]
+     ;;[0.5 0.5 0.5] [0.5 0.5 0.5] [1.0 1.0 0.5] [0.8 0.9 0.3]
+     num-contours))
+
+  (def mat (noise-matrix res n-scale))
+  (def mat (circle-matrix res 8 0.25))
+
+  (->> (m/norm-range num-contours)
+       (rest)
+       (map
+        #(svg/group
+          {:stroke (col/rgba->css (palette (int (* % (dec num-contours)))))
+           :fill "none"}
+          (map contour->svg (contours/find-contours2d mat %))))
+       (svg/svg
+        {:width width
+         :height width
+         :viewBox (format "%1.2f %1.2f %1.2f %1.2f" scale scale clipped clipped)})
+       (svg/serialize)
+       (spit "iso.svg"))
+#+END_SRC
+
+*** Implementation
+
+Loosely based on Marching Squares/Cubes implementations by Paul Bourke (C) & Murphy Stein (Java):
+
+- http://paulbourke.net/geometry/polygonise/
+- https://github.com/murphydactyl/JavaKinectFingerTracker/blob/master/imageprocessor/FindIsolines.java
 
 #+BEGIN_SRC clojure :noweb-ref contours2d
   (def edge-index
@@ -215,7 +340,7 @@ given contour level is crossed between cells.
         3 [(+ y (mix2d src y x y' x iso)) x]
         nil)))
 
-  (defn get-contours2d
+  (defn find-contours2d
     [src isoval]
     (let [[h' w']  (map dec (nd/shape src))
           coded    (encode-crossings2d src isoval)
@@ -256,20 +381,4 @@ given contour level is crossed between cells.
   <<contours2d>>
 #+END_SRC
 
-#+BEGIN_SRC clojure
-  (require
-   '[thi.ng.ndarray.core :as nd]
-   '[thi.ng.ndarray.contours :as c])
 
-  (def a (nd/ndarray :float32 (float-array (* 33 33)) [33 33]))
-
-  (dorun
-   (for [[y x] (nd/position-seq a)
-         :let [dx (- 16 x)
-               dy (- 16 y)
-               t (Math/atan2 dy dx)
-               d (Math/sqrt (* (Math/sin (* t 4)) (+ (* dx dx) (* dy dy))))]]
-     (nd/set-at a x y d)))
-
-  (c/get-contours2d a 15)
-#+END_SRC

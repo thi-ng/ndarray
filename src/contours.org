@@ -22,7 +22,7 @@ shown in the example below...
 
 *** Examples
 
-The following demo utilizes thi.ng/geom, thi.ng/math and thi.ng/color
+The following demo utilizes [[http://thi.ng/geom][thi.ng/geom]], [[http://thi.ng/math][thi.ng/math]] and [[http://thi.ng/color][thi.ng/color]]
 libs to create SVG based contour maps of generated dummy data. To try
 it out yourself, simply add the following dependency (in addition to
 this (ndarray) library) - geom itself depends on math & color so they
@@ -35,6 +35,8 @@ don't need to be specified in your project:
 These images were generated with the demo code below and show the
 impact of different matrix resolutions on the precision and quality of
 the resulting visualizations.
+
+*Note:* Click on images to view in bigger resolution
 
 **** Simplex noise
 

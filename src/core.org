@@ -389,9 +389,9 @@ implementation for the given arguments.
                    ~c (- ~p ~'_offset)
                    ~@(drop-last
                       2 (mapcat
-                         #(list
-                           (->a %) `(int (/ ~c ~(->st %)))
-                           c `(- ~c (* ~(->a %) ~(->st %))))
+                         #(let [a (->a %) s (->st %)]
+                            (list a `(int (/ ~c ~s))
+                                  c `(- ~c (* ~a ~s))))
                          rdim))]
                [~@asyms]))
            (~'index-seq
@@ -444,18 +444,19 @@ implementation for the given arguments.
            (~'truncate-l
              [_# ~@psyms]
              (let [~@(mapcat
-                      #(list
-                        [(->a %) (->b %)]
-                        `(if (pos? ~(->p %))
-                           [(- ~(->sh %) (int ~(->p %)))
-                            (* ~(->st %) (int ~(->p %)))]
-                           [~(->sh %) 0]))
+                      #(let [p (->p %) sh (->sh %) st (->st %)]
+                         (list
+                          [(->a %) (->b %)]
+                          `(if (pos? ~p)
+                             [(- ~sh (int ~p))
+                              (* ~st (int ~p))]
+                             [~sh 0])))
                       rdim)
                    ~o (+ ~@(->> rdim (map ->b) (cons '_offset) (pair-fn '+)))]
                (new ~type-name ~data ~o ~@strides ~@asyms)))
            (~'transpose
              [_# ~@psyms]
-             (let [~@(mapcat #(list (->p %) `(if ~(->p %) (int ~(->p %)) ~%)) rdim)
+             (let [~@(mapcat #(let [p (->p %)] (list p `(if ~p (int ~p) ~%))) rdim)
                    ~c [~@strides]
                    ~d [~@shapes]]
                (new ~type-name ~data ~'_offset
@@ -465,29 +466,31 @@ implementation for the given arguments.
              [_# ~@psyms]
              (let [~o ~'_offset
                    ~@(mapcat
-                      #(let [stride' `(* ~(->st %) (int ~(->p %)))]
+                      #(let [p (->p %) sh (->sh %) st (->st %)
+                             stride' `(* ~st (int ~p))]
                          (list
                           [(->a %) (->b %) o]
-                          `(if (number? ~(->p %))
-                             (if (neg? ~(->p %))
-                               [~(list 'int (list 'Math/ceil `(/ (- ~(->sh %)) (int ~(->p %)))))
+                          `(if (number? ~p)
+                             (if (neg? ~p)
+                               [(int (~'Math/ceil (/ (- ~sh) (int ~p))))
                                 ~stride'
-                                (+ ~o (* ~(->st %) (dec ~(->sh %))))]
-                               [~(list 'int (list 'Math/ceil `(/ ~(->sh %) (int ~(->p %)))))
+                                (+ ~o (* ~st (dec ~sh)))]
+                               [(int (~'Math/ceil (/ ~sh (int ~p))))
                                 ~stride'
                                 ~o])
-                             [~(->sh %) ~(->st %) ~o])))
+                             [~sh ~st ~o])))
                       rdim)]
                (new ~type-name ~data ~o ~@bsyms ~@asyms)))
            (~'pick
              [_# ~@psyms]
              (let [~o ~'_offset, ~c [], ~d []
                    ~@(mapcat
-                      #(list
-                        [c d o]
-                        `(if (and (number? ~(->p %)) (>= ~(->p %) 0))
-                           [~c ~d (+ ~o (* ~(->st %) (int ~(->p %))))]
-                           [(conj ~c ~(->sh %)) (conj ~d ~(->st %)) ~o]))
+                      #(let [p (->p %) sh (->sh %) st (->st %)]
+                         (list
+                          [c d o]
+                          `(if (and (number? ~p) (>= ~p 0))
+                             [~c ~d (+ ~o (* ~st (int ~p)))]
+                             [(conj ~c ~sh) (conj ~d ~st) ~o])))
                       rdim)
                    cnt# (count ~c)]
                (if (pos? cnt#)

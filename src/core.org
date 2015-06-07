@@ -160,40 +160,40 @@ availability in Clojure & Clojurescript.
   #?(:clj
      (do
        (def-ndarray 1 nil     nil        :generic to-array aget aset true)
-       (def-ndarray 1 boolean "booleans" :boolean boolean-array aget aset-boolean true)
-       (def-ndarray 1 byte    "bytes"    :int8    byte-array aget aset-byte true)
-       (def-ndarray 1 short   "shorts"   :int16   short-array aget aset-short true)
-       (def-ndarray 1 int     "ints"     :int32   int-array aget aset-int true)
-       (def-ndarray 1 long    "longs"    :int64   long-array aget aset-long true)
-       (def-ndarray 1 float   "floats"   :float32 float-array aget aset-float true)
-       (def-ndarray 1 double  "doubles"  :float64 double-array aget aset-double true)
+       (def-ndarray 1 boolean "booleans" :boolean boolean-array aget aset true)
+       (def-ndarray 1 byte    "bytes"    :int8    byte-array aget aset true)
+       (def-ndarray 1 short   "shorts"   :int16   short-array aget aset true)
+       (def-ndarray 1 int     "ints"     :int32   int-array aget aset true)
+       (def-ndarray 1 long    "longs"    :int64   long-array aget aset true)
+       (def-ndarray 1 float   "floats"   :float32 float-array aget aset true)
+       (def-ndarray 1 double  "doubles"  :float64 double-array aget aset true)
 
        (def-ndarray 2 nil     nil        :generic to-array aget aset true)
-       (def-ndarray 2 boolean "booleans" :boolean boolean-array aget aset-boolean true)
-       (def-ndarray 2 byte    "bytes"    :int8    byte-array aget aset-byte true)
-       (def-ndarray 2 short   "shorts"   :int16   short-array aget aset-short true)
-       (def-ndarray 2 int     "ints"     :int32   int-array aget aset-int true)
-       (def-ndarray 2 long    "longs"    :int64   long-array aget aset-long true)
-       (def-ndarray 2 float   "floats"   :float32 float-array aget aset-float true)
-       (def-ndarray 2 double  "doubles"  :float64 double-array aget aset-double true)
+       (def-ndarray 2 boolean "booleans" :boolean boolean-array aget aset true)
+       (def-ndarray 2 byte    "bytes"    :int8    byte-array aget aset true)
+       (def-ndarray 2 short   "shorts"   :int16   short-array aget aset true)
+       (def-ndarray 2 int     "ints"     :int32   int-array aget aset true)
+       (def-ndarray 2 long    "longs"    :int64   long-array aget aset true)
+       (def-ndarray 2 float   "floats"   :float32 float-array aget aset true)
+       (def-ndarray 2 double  "doubles"  :float64 double-array aget aset true)
 
        (def-ndarray 3 nil     nil        :generic to-array aget aset true)
-       (def-ndarray 3 boolean "booleans" :boolean boolean-array aget aset-boolean true)
-       (def-ndarray 3 byte    "bytes"    :int8    byte-array aget aset-byte true)
-       (def-ndarray 3 short   "shorts"   :int16   short-array aget aset-short true)
-       (def-ndarray 3 int     "ints"     :int32   int-array aget aset-int true)
-       (def-ndarray 3 long    "longs"    :int64   long-array aget aset-long true)
-       (def-ndarray 3 float   "floats"   :float32 float-array aget aset-float true)
-       (def-ndarray 3 double  "doubles"  :float64 double-array aget aset-double true)
+       (def-ndarray 3 boolean "booleans" :boolean boolean-array aget aset true)
+       (def-ndarray 3 byte    "bytes"    :int8    byte-array aget aset true)
+       (def-ndarray 3 short   "shorts"   :int16   short-array aget aset true)
+       (def-ndarray 3 int     "ints"     :int32   int-array aget aset true)
+       (def-ndarray 3 long    "longs"    :int64   long-array aget aset true)
+       (def-ndarray 3 float   "floats"   :float32 float-array aget aset true)
+       (def-ndarray 3 double  "doubles"  :float64 double-array aget aset true)
 
        (def-ndarray 4 nil     nil        :generic to-array aget aset true)
-       (def-ndarray 4 boolean "booleans" :boolean boolean-array aget aset-boolean true)
-       (def-ndarray 4 byte    "bytes"    :int8    byte-array aget aset-byte true)
-       (def-ndarray 4 short   "shorts"   :int16   short-array aget aset-short true)
-       (def-ndarray 4 int     "ints"     :int32   int-array aget aset-int true)
-       (def-ndarray 4 long    "longs"    :int64   long-array aget aset-long true)
-       (def-ndarray 4 float   "floats"   :float32 float-array aget aset-float true)
-       (def-ndarray 4 double  "doubles"  :float64 double-array aget aset-double true)
+       (def-ndarray 4 boolean "booleans" :boolean boolean-array aget aset true)
+       (def-ndarray 4 byte    "bytes"    :int8    byte-array aget aset true)
+       (def-ndarray 4 short   "shorts"   :int16   short-array aget aset true)
+       (def-ndarray 4 int     "ints"     :int32   int-array aget aset true)
+       (def-ndarray 4 long    "longs"    :int64   long-array aget aset true)
+       (def-ndarray 4 float   "floats"   :float32 float-array aget aset true)
+       (def-ndarray 4 double  "doubles"  :float64 double-array aget aset true)
        )
      :cljs
      (do
@@ -283,17 +283,17 @@ implementation for the given arguments.
 
   (defn- make-indexer
     [dim ->st p]
-    `(+ ~@(->> (range dim)
-               (map #(list '* (->st %) `(int (~p ~%))))
-               (cons '_offset)
-               (pair-fn '+))))
+    `(int (+ ~@(->> (range dim)
+                    (map #(list '* (->st %) `(int (~p ~%))))
+                    (cons '_offset)
+                    (pair-fn '+)))))
 
   (defn- make-indexer-syms
     [dim ->st ->p]
-    `(+ ~@(->> (range dim)
-               (map #(list '* (->st %) `(int ~(->p %))))
-               (cons '_offset)
-               (pair-fn '+))))
+    `(int (+ ~@(->> (range dim)
+                    (map #(list '* (->st %) `(int ~(->p %))))
+                    (cons '_offset)
+                    (pair-fn '+)))))
 
   (defmacro and*
     "Like clojure.core/and, but avoids intermediate let bindings and
@@ -378,7 +378,7 @@ implementation for the given arguments.
                (loop [~c (thi.ng.ndarray.core/index-seq _#)
                       ~d (thi.ng.ndarray.core/index-seq arr#)]
                  (when ~c
-                   (~set buf# (int (first ~d)) ~(do-cast cast `(~get ~data (first ~c))))
+                   (~set buf# (int (first ~d)) ~(do-cast cast `(~get ~data (int (first ~c)))))
                    (recur (next ~c) (next ~d))))
                arr#))
            (~'index-at
@@ -429,7 +429,7 @@ implementation for the given arguments.
                    (~set ~data ~c ~(do-cast cast `(~f ~@psyms (~get ~data ~c))))))
              _#)
            (~'update-at-index
-             [_# ~c ~f] (~set ~data ~c ~(do-cast cast `(~f ~c (~get ~data ~c)))) _#)
+             [_# ~c ~f] (~set ~data ~c ~(do-cast cast `(~f ~c (~get ~data (int ~c))))) _#)
            (~'truncate-h
              [_# ~@psyms]
              (new ~type-name ~data ~'_offset ~@strides
@@ -494,14 +494,14 @@ implementation for the given arguments.
                       rdim)
                    cnt# (count ~c)]
                (if (pos? cnt#)
-                 ((get-in @~'ctor-registry [cnt# ~type-id :ctor]) ~data ~o ~d ~c)
-                 (~get ~data ~o))))
+                 ((get-in @~'thi.ng.ndarray.core/ctor-registry [cnt# ~type-id :ctor]) ~data ~o ~d ~c)
+                 (~get ~data (int ~o)))))
            ~'Object
            (~'toString
              [_#]
              (pr-str
               {:data ~data :type ~type-id
-               :size (* ~@(pair-fn '* shapes)) :total (count ~data) :offset ~'_offset
+               :size (* ~@(pair-fn '* shapes)) :total (count (seq _#)) :offset ~'_offset
                :shape [~@shapes] :stride [~@strides]})))
 
          (defn ~(with-meta raw-name {:export true})

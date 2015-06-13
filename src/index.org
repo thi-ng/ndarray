@@ -12,6 +12,7 @@
          - [[#skip-items-in-any-dimension][Skip items in any dimension]]
          - [[#extract-slices-of-a-volume][Extract slices of a volume]]
          - [[#fill-subsection-of-an-array][Fill subsection of an array]]
+         - [[#contour-extraction][Contour extraction]]
          - [[#undirected-graph-queries-via-adjacency-matrix][Undirected graph queries via adjacency matrix]]
  - [[#namespaces][Namespaces]]
  - [[#tests][Tests]]
@@ -113,6 +114,12 @@ Likewise, step order can be independently flipped/manipulated in any dimension..
   ;;  0 0 0 0 0)
 #+END_SRC
 
+*** Contour extraction
+
+[[../assets/circle-res64.jpg]]
+
+Code for this example is in the [[./contours.org][contours namespace]].
+
 *** Undirected graph queries via adjacency matrix
 
 A slightly larger example to demonstrate connected component queries on a graph:
@@ -184,7 +191,7 @@ A slightly larger example to demonstrate connected component queries on a graph:
 ** Injected properties                                             :noexport:
 
 #+BEGIN_SRC clojure :noweb-ref version
-0.2.0-SNAPSHOT
+0.2.0
 #+END_SRC
 #+BEGIN_SRC clojure :exports none :noweb-ref project-url
 http://thi.ng/ndarray
@@ -355,9 +362,10 @@ symbol =version= holding the version string defined above:
 
 ** Release history
 
-| *Version* | *Released* | *Description*        | *Lein coordinates*         | *Tagged Github URL* |
-|-----------+------------+----------------------+----------------------------+---------------------|
-|     0.1.0 | 2015-05-31 | initial test release | =[thi.ng/ndarray "0.1.0"]= | [[https://github.com/thi-ng/typedarrays/tree/0.1.0][0.1.0]]               |
+| *Version* | *Released* | *Description*                          | *Lein coordinates*         | *Tagged Github URL* |
+|-----------+------------+----------------------------------------+----------------------------+---------------------|
+|     0.2.0 | 2015-06-14 | add contour ns, bugfixes, updated deps | =[thi.ng/ndarray "0.2.0"]= | [[https://github.com/thi-ng/typedarrays/tree/0.2.0][0.2.0]]               |
+|     0.1.0 | 2015-05-31 | initial test release                   | =[thi.ng/ndarray "0.1.0"]= | [[https://github.com/thi-ng/typedarrays/tree/0.1.0][0.1.0]]               |
 
 ** Contributors
 

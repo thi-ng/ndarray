@@ -5,6 +5,7 @@
      - [[#2d-contour-extraction][2D contour extraction]]
          - [[#examples][Examples]]
          - [[#implementation][Implementation]]
+     - [[#todo-3d-contour-extraction][TODO 3D contour extraction]]
      - [[#level-crossings][Level crossings]]
          - [[#examples][Examples]]
          - [[#implementation][Implementation]]
@@ -267,18 +268,25 @@ Loosely based on Marching Squares/Cubes implementations by Paul Bourke (C) & Mur
           (persistent! (conj! @contours (persistent! curr)))))))
 #+END_SRC
 
+** TODO 3D contour extraction
+
+This functionality will be ported from the [[https://github.com/thi-ng/geom/blob/master/geom-voxel/src/index.org][thi.ng/geom-voxel module]]...
+
 ** Level crossings
 
 This section contains somewhat less high level operations to find
-level crossings in 1D, 2D and 3D ndarrays. Unlike the contour line
-extraction above, which procudes a logical sequence of connected
+level crossings in 1D, 2D and 3D ndarrays. Unlike the contour
+extractions above, which procude a logical sequence of connected
 points/segments/facets in the grid, these functions here merely
-produce a sequence of (potentially) unconnected cell positions and are
-intended for more analytical use cases. The functions all take an
-ndarray and contour level value and assume the array to be in major
-shape order (the default order), i.e. in 2D row-major (YX), in 3D
-slice-row-major (ZYX). The functions return interpolated grid
-positions where the given contour level is crossed between cells.
+produce a sequence of (potentially) unconnected cell positions where
+thresholds are crossed and are intended for more analytical use cases.
+The functions all take an ndarray and contour level value and assume
+the array to be in major shape order (the default order), i.e. in 2D
+row-major (YX), in 3D slice-row-major (ZYX). The functions return
+interpolated grid positions where the given contour level is crossed
+between cells. If the array doesn't conform to this ordering, use the
+=nd/transpose= method to create a properly ordered view before using
+the functions below.
 
 *** Examples
 

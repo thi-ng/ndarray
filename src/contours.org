@@ -52,7 +52,7 @@ the resulting visualizations.
 
 **** Demo code
 
-#+BEGIN_SRC clojure
+#+BEGIN_SRC clojure :tangle ../babel/examples/contours.clj :mkdirp yes :padline no
   (require
    '[thi.ng.ndarray.core :as nd]
    '[thi.ng.ndarray.contours :as contours]
@@ -62,6 +62,13 @@ the resulting visualizations.
    '[thi.ng.math.core :as m]
    '[thi.ng.math.simplexnoise :as n]
    '[thi.ng.color.core :as col])
+
+  (def res 128)
+  (def width 640.0)
+  (def scale (/ width (- res 2)))
+  (def clipped (- width (* 2.0 scale)))
+  (def n-scale 0.03)
+  (def num-contours 60)
 
   (defn make-palette
     "Cosine based RGB palette generation method by iq: http://v.gd/B2aySt"
@@ -88,7 +95,7 @@ the resulting visualizations.
       (dorun
        (for [[y x] (nd/position-seq mat)]
          (nd/set-at mat x y (+ 0.5 (* 0.5 (n/noise2 (+ 101 (* x ns)) (* y ns)))))))
-      (contours/set-border2d mat 1)))
+      (contours/set-border-2d mat 1)))
 
   (defn circle-matrix
     "Creates new 2D matrix of size res and populates it w/ modulated
@@ -107,14 +114,7 @@ the resulting visualizations.
                    d  (Math/sqrt (* (+ 0.5 (* amp (Math/sin (* t spikes))))
                                     (+ (* dx dx) (* dy dy))))]]
          (nd/set-at mat x y (/ d dmax))))
-      (contours/set-border2d mat 1)))
-
-  (def res 128)
-  (def width 640.0)
-  (def scale (/ width (- res 2)))
-  (def clipped (- width (* 2.0 scale)))
-  (def n-scale 0.03)
-  (def num-contours 60)
+      (contours/set-border-2d mat 1)))
 
   (def palette
     (make-palette
@@ -133,7 +133,7 @@ the resulting visualizations.
         #(svg/group
           {:stroke (col/rgba->css (palette (int (* % (dec num-contours)))))
            :fill "none"}
-          (map contour->svg (contours/find-contours2d mat %))))
+          (map contour->svg (contours/find-contours-2d mat %))))
        (svg/svg
         {:width width
          :height width
@@ -150,16 +150,16 @@ Loosely based on Marching Squares/Cubes implementations by Paul Bourke (C) & Mur
 - https://github.com/murphydactyl/JavaKinectFingerTracker/blob/master/imageprocessor/FindIsolines.java
 
 #+BEGIN_SRC clojure :noweb-ref contours2d
-  (def edge-index
+  (def edge-index-2d
     [nil [2 0] [1 0] [1 0]
      [0 0] nil [0 0] [0 0]
      [3 0] [2 0] nil [1 0]
      [3 0] [2 0] [3 0] nil])
 
-  (def next-edges
+  (def next-edges-2d
     [[-1 0] [0 1] [1 0] [0 -1]])
 
-  (defn set-border2d
+  (defn set-border-2d
     [mat x]
     (let [[h w] (nd/shape mat)
           h' (dec h)
@@ -180,7 +180,7 @@ Loosely based on Marching Squares/Cubes implementations by Paul Bourke (C) & Mur
           (recur (dec i))))
       mat))
 
-  (defn encode-crossings2d
+  (defn encode-crossings-2d
     [src isoval]
     (let [out  (nd/ndarray :int8 (byte-array (nd/size src)) (nd/shape src))
           iso? (fn [y x m] (if (< (nd/get-at src y x) isoval) m 0))]
@@ -198,7 +198,7 @@ Loosely based on Marching Squares/Cubes implementations by Paul Bourke (C) & Mur
             (recur (next pos)))
           out))))
 
-  (defn mean-cell-value2d
+  (defn mean-cell-value-2d
     [src y x]
     (* (+ (+ (nd/get-at src y x) (nd/get-at src y (inc x)))
           (+ (nd/get-at src (inc y) x) (nd/get-at src (inc y) (inc x))))
@@ -206,22 +206,15 @@ Loosely based on Marching Squares/Cubes implementations by Paul Bourke (C) & Mur
 
   (defn process-saddle5
     [src y x iso from]
-    (if (> (mean-cell-value2d src y x) iso)
-      (if (= 3 from) [2 0x04] [0 0x01])
-      (if (= 3 from) [0 0x0d] [2 0x07])))
+    (if (> (mean-cell-value-2d src y x) iso)
+      (if (== 3 from) [2 0x04] [0 0x01])
+      (if (== 3 from) [0 0x0d] [2 0x07])))
 
   (defn process-saddle10
     [src y x iso from]
-    (if (> (mean-cell-value2d src y x) iso)
-      (if (= 0 from) [3 0x02] [1 0x08])
-      (if (= 2 from) [3 0x0b] [1 0x0e])))
-
-  (defn process-cell2d
-    [src code y x iso from]
-    (case (int code)
-      5 (process-saddle5 src y x iso from)
-      10 (process-saddle10 src y x iso from)
-      (edge-index (int code))))
+    (if (> (mean-cell-value-2d src y x) iso)
+      (if (== 0 from) [3 0x02] [1 0x08])
+      (if (== 2 from) [3 0x0b] [1 0x0e])))
 
   (defn mix2d
     [src y1 x1 y2 x2 iso]
@@ -229,7 +222,7 @@ Loosely based on Marching Squares/Cubes implementations by Paul Bourke (C) & Mur
           b (nd/get-at src y2 x2)]
       (if (== a b) 0 (/ (- a iso) (- a b)))))
 
-  (defn contour-vertex2d
+  (defn contour-vertex-2d
     [src y x to iso]
     (let [x' (inc x) y' (inc y)]
       (case (int to)
@@ -239,13 +232,15 @@ Loosely based on Marching Squares/Cubes implementations by Paul Bourke (C) & Mur
         3 [(+ y (mix2d src y x y' x iso)) x]
         nil)))
 
-  (defn find-contours2d
+  (defn find-contours-2d
     [src isoval]
-    (let [[h' w']  (map dec (nd/shape src))
-          coded    (encode-crossings2d src isoval)
-          contours (volatile! [])]
+    (let [[h' w']  (nd/shape src)
+          h'       (dec h')
+          w'       (dec w')
+          coded    (encode-crossings-2d src isoval)
+          contours (volatile! (transient []))]
       (loop [pos  (nd/position-seq coded)
-             curr []
+             curr (transient [])
              to   nil
              p    nil]
         (if pos
@@ -254,18 +249,22 @@ Loosely based on Marching Squares/Cubes implementations by Paul Bourke (C) & Mur
             (if (or (>= x w') (>= y h'))
               (recur (next pos) curr to nil)
               (let [id         (nd/get-at coded y x)
-                    [to clear] (process-cell2d src id y x isoval from)
-                    curr       (if (and (nil? from) to (seq curr))
-                                 (do (vswap! contours conj curr) [])
+                    [to clear] (case (int id)
+                                 5 (process-saddle5 src y x isoval from)
+                                 10 (process-saddle10 src y x isoval from)
+                                 (edge-index-2d (int id)))
+                    curr       (if (and (nil? from) to (pos? (count curr)))
+                                 (do (vswap! contours conj! (persistent! curr))
+                                     (transient []))
                                  curr)]
                 (when clear
                   (nd/set-at coded y x clear))
                 (if (and to (>= to 0))
-                  (let [vertex  (contour-vertex2d src y x to isoval)
-                        [oy ox] (next-edges to)]
-                    (recur (next pos) (conj curr vertex) to [(+ y oy) (+ x ox)]))
+                  (let [vertex  (contour-vertex-2d src y x to isoval)
+                        [oy ox] (next-edges-2d to)]
+                    (recur (next pos) (conj! curr vertex) to [(+ y oy) (+ x ox)]))
                   (recur (next pos) curr to nil)))))
-          (conj @contours curr)))))
+          (persistent! (conj! @contours (persistent! curr)))))))
 #+END_SRC
 
 ** Level crossings
@@ -396,5 +395,3 @@ positions where the given contour level is crossed between cells.
 
   <<contours2d>>
 #+END_SRC
-
-

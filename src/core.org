@@ -398,10 +398,6 @@ implementation for the given arguments.
          `(~'seq
            [_#]
            ~(for* ->a ->sh rdim `(~get ~data ~idx)))
-         'clojure.core.protocols/InternalReduce
-         `(~'internal-reduce
-           [_# ~f ~init]
-           ~((reduce-init-impls (count rdim)) f init ->a ->sh ->st get data rdim))
          'clojure.core.protocols/CollReduce
          `(~'coll-reduce
            [_# ~f ~init]
@@ -410,7 +406,11 @@ implementation for the given arguments.
          'ISeqable
          `(~'-seq
            [_#]
-           ~(for* ->a ->sh rdim `(~get ~data ~idx)))))))
+           ~(for* ->a ->sh rdim `(~get ~data ~idx)))
+         'IReduce
+         `(~'-reduce
+          [_# ~f ~init]
+          ~((reduce-init-impls (count rdim)) f init ->a ->sh ->st get data rdim))))))
 
   (defn- do-cast
     [cast body]

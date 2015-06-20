@@ -318,88 +318,104 @@ implementation for the given arguments.
     [->a ->sh rdim body]
     `(for [~@(mapcat #(vector (->a %) `(range ~(->sh %))) rdim)] ~body))
 
-  (defn- reduce-init1
-    [f acc ->p ->sh ->st get data rdim]
-    (let [x  (->p 0)
-          sx (->sh 0)
-          st (->st 0)]
+  (defn- reduce-1
+    [f acc ->p ->sh ->st get data rdim init?]
+    (let [x   (->p 0)
+          sx  (->sh 0)
+          st  (->st 0)
+          idx (gensym)]
       `(if (zero? ~sx)
-         ~acc
-         (let [sx# (dec ~sx)]
-           (loop [~acc ~acc ~x 0 idx# ~'_offset]
-             (if (reduced? ~acc)
-               @~acc
-               (let [~acc (~f ~acc (~get ~data idx#))]
-                 (if (< ~x sx#)
-                   (recur ~acc (unchecked-inc-int ~x) (unchecked-add-int idx# ~st))
-                   (if (reduced? ~acc) @~acc ~acc)))))))))
+         ~(if init? nil `(~f))
+         (loop ~(if init?
+                  [acc acc x 0 idx '_offset]
+                  [acc `(num (~get ~data ~'_offset)) x 1 idx `(unchecked-add-int ~'_offset ~st)])
+           (if (reduced? ~acc)
+             @~acc
+             (if (< ~x ~sx)
+               (let [~acc (~f ~acc (~get ~data ~idx))]
+                 (recur ~acc (unchecked-inc-int ~x) (unchecked-add-int ~idx ~st)))
+               (if (reduced? ~acc) @~acc ~acc)))))))
 
-  (defn- reduce-init2
-    [f acc ->p ->sh ->st get data rdim]
+  (defn- reduce-2
+    [f acc ->p ->sh ->st get data rdim init?]
     (let [[y x]     (map ->p rdim)
           [sy sx]   (map ->sh rdim)
-          [sty stx] (map ->st rdim)]
+          [sty stx] (map ->st rdim)
+          idx       (gensym)]
       `(if (zero? (* ~sy ~sx))
-         ~acc
-         (let [sy# (dec ~sy) sx# (dec ~sx)]
-           (loop [~acc ~acc ~y 0 ~x 0 idx# ~'_offset]
+         ~(if init? acc `(~f))
+         (let [sy# (dec ~sy)]
+           (loop ~(if init?
+                    [acc acc y 0 x 0 idx '_offset]
+                    [acc `(num (~get ~data ~'_offset)) y 0 x 1 idx `(unchecked-add-int ~'_offset ~stx)])
              (if (reduced? ~acc)
                @~acc
-               (let [~acc (~f ~acc (~get ~data idx#))]
-                 (if (< ~x sx#)
-                   (recur ~acc ~y (unchecked-inc-int ~x) (unchecked-add-int idx# ~stx))
-                   (if (< ~y sy#)
-                     (recur ~acc (unchecked-inc-int ~y) 0 (+ ~'_offset (* ~sty (unchecked-inc-int ~y))))
-                     (if (reduced? ~acc) @~acc ~acc))))))))))
+               (if (< ~x ~sx)
+                 (recur (~f ~acc (~get ~data ~idx)) ~y (unchecked-inc-int ~x) (unchecked-add-int ~idx ~stx))
+                 (if (< ~y sy#)
+                   (let [~idx (+ ~'_offset (* ~sty (unchecked-inc-int ~y)))]
+                     (recur (~f ~acc (~get ~data ~idx)) (unchecked-inc-int ~y) 1 (unchecked-add-int ~idx ~stx)))
+                   (if (reduced? ~acc) @~acc ~acc)))))))))
 
-  (defn- reduce-init3
-    [f acc ->p ->sh ->st get data rdim]
+  (defn- reduce-3
+    [f acc ->p ->sh ->st get data rdim init?]
     (let [[z y x]       (map ->p rdim)
           [sz sy sx]    (map ->sh rdim)
-          [stz sty stx] (map ->st rdim)]
+          [stz sty stx] (map ->st rdim)
+          idx           (gensym)]
       `(if (zero? (* (* ~sz ~sy) ~sx))
-         ~acc
-         (let [sz# (dec ~sz) sy# (dec ~sy) sx# (dec ~sx)]
-           (loop [~acc ~acc ~z 0 ~y 0 ~x 0 idx# ~'_offset]
+         ~(if init? acc `(~f))
+         (let [sz# (dec ~sz) sy# (dec ~sy)]
+           (loop ~(if init?
+                    [acc acc z 0 y 0 x 0 idx '_offset]
+                    [acc `(num (~get ~data ~'_offset)) z 0 y 0 x 1 idx `(unchecked-add-int ~'_offset ~stx)])
              (if (reduced? ~acc)
                @~acc
-               (let [~acc (~f ~acc (~get ~data idx#))]
-                 (if (< ~x sx#)
-                   (recur ~acc ~z ~y (unchecked-inc-int ~x) (unchecked-add-int idx# ~stx))
-                   (if (< ~y sy#)
-                     (recur ~acc ~z (unchecked-inc-int ~y) 0 (+ ~'_offset (+ (* ~stz ~z) (* ~sty (unchecked-inc-int ~y)))))
-                     (if (< ~z sz#)
-                       (recur ~acc (unchecked-inc-int ~z) 0 0 (+ ~'_offset (* ~stz (unchecked-inc-int ~z))))
-                       (if (reduced? ~acc) @~acc ~acc)))))))))))
+               (if (< ~x ~sx)
+                 (recur (~f ~acc (~get ~data ~idx)) ~z ~y (unchecked-inc-int ~x) (unchecked-add-int ~idx ~stx))
+                 (if (< ~y sy#)
+                   (let [~idx (+ ~'_offset (+ (* ~stz ~z) (* ~sty (unchecked-inc-int ~y))))]
+                     (recur (~f ~acc (~get ~data ~idx)) ~z (unchecked-inc-int ~y) 1 (unchecked-add-int ~idx ~stx)))
+                   (if (< ~z sz#)
+                     (let [~idx (+ ~'_offset (* ~stz (unchecked-inc-int ~z)))]
+                       (recur (~f ~acc (~get ~data ~idx)) (unchecked-inc-int ~z) 0 1 (unchecked-add-int ~idx ~stx)))
+                     (if (reduced? ~acc) @~acc ~acc))))))))))
 
-  (defn- reduce-init4
-    [f acc ->p ->sh ->st get data rdim]
+  (defn- reduce-4
+    [f acc ->p ->sh ->st get data rdim init?]
     (let [[w z y x]         (map ->p rdim)
           [sw sz sy sx]     (map ->sh rdim)
-          [stw stz sty stx] (map ->st rdim)]
+          [stw stz sty stx] (map ->st rdim)
+          idx               (gensym)]
       `(if (zero? (* (* (* ~sw ~sz) ~sy) ~sx))
-         ~acc
-         (let [sw# (dec ~sw) sz# (dec ~sz) sy# (dec ~sy) sx# (dec ~sx)]
-           (loop [~acc ~acc ~w 0 ~z 0 ~y 0 ~x 0 idx# ~'_offset]
+         ~(if init? acc `(~f))
+         (let [sw# (dec ~sw) sz# (dec ~sz) sy# (dec ~sy)]
+           (loop ~(if init?
+                    [acc acc w 0 z 0 y 0 x 0 idx '_offset]
+                    [acc `(num (~get ~data ~'_offset)) w 0 z 0 y 0 x 1 idx `(unchecked-add-int ~'_offset ~stx)])
              (if (reduced? ~acc)
                @~acc
-               (let [~acc (~f ~acc (~get ~data idx#))]
-                 (if (< ~x sx#)
-                   (recur ~acc ~w ~z ~y (unchecked-inc-int ~x) (unchecked-add-int idx# ~stx))
-                   (if (< ~y sy#)
-                     (recur ~acc ~w ~z (unchecked-inc-int ~y) 0 (+ ~'_offset (+ (* ~stw ~w) (+ (* ~stz ~z) (* ~sty (unchecked-inc-int ~y))))))
-                     (if (< ~z sz#)
-                       (recur ~acc ~w (unchecked-inc-int ~z) 0 0 (+ ~'_offset (+ (* ~stw ~w) (* ~stz (unchecked-inc-int ~z)))))
-                       (if (< ~w sw#)
-                         (recur ~acc (unchecked-inc-int ~w) 0 0 0 (+ ~'_offset (* ~stw (unchecked-inc-int ~w))))
-                         (if (reduced? ~acc) @~acc ~acc))))))))))))
+               (if (< ~x ~sx)
+                 (recur (~f ~acc (~get ~data ~idx)) ~w ~z ~y (unchecked-inc-int ~x) (unchecked-add-int ~idx ~stx))
+                 (if (< ~y sy#)
+                   (let [~idx (+ ~'_offset (+ (* ~stw ~w) (+ (* ~stz ~z) (* ~sty (unchecked-inc-int ~y)))))]
+                     (recur (~f ~acc (~get ~data ~idx)) ~w ~z (unchecked-inc-int ~y) 1 (unchecked-add-int ~idx ~stx)))
+                   (if (< ~z sz#)
+                     (let [~idx (+ ~'_offset (+ (* ~stw ~w) (* ~stz (unchecked-inc-int ~z))))]
+                       (recur (~f ~acc (~get ~data ~idx)) ~w (unchecked-inc-int ~z) 0 1 (unchecked-add-int ~idx ~stx)))
+                     (if (< ~w sw#)
+                       (let [~idx (+ ~'_offset (* ~stw (unchecked-inc-int ~w)))]
+                         (recur (~f ~acc (~get ~data ~idx)) (unchecked-inc-int ~w) 0 0 1 (unchecked-add-int ~idx ~stx)))
+                       (if (reduced? ~acc) @~acc ~acc)))))))))))
 
-  (def ^:private reduce-init-impls
-    [nil reduce-init1 reduce-init2 reduce-init3 reduce-init4])
+  (def ^:private reduce-impls
+    [nil reduce-1 reduce-2 reduce-3 reduce-4])
 
   (defn- inject-clj-protos
     [clj? get data ->a ->sh ->st idx rdim]
-    (let [[f init] (repeatedly gensym)]
+    (let [[f init] (repeatedly gensym)
+          r-impl   (reduce-impls (count rdim))
+          reduce*  (partial r-impl f init ->a ->sh ->st get data rdim)]
       (if clj?
         (list
          'clojure.lang.Seqable
@@ -408,8 +424,9 @@ implementation for the given arguments.
            ~(for* ->a ->sh rdim `(~get ~data ~idx)))
          'clojure.core.protocols/CollReduce
          `(~'coll-reduce
-           [_# ~f ~init]
-           ~((reduce-init-impls (count rdim)) f init ->a ->sh ->st get data rdim)))
+           [_# ~f] ~(reduce* false))
+         `(~'coll-reduce
+           [_# ~f ~init] ~(reduce* true)))
         (list
          'ISeqable
          `(~'-seq
@@ -417,8 +434,9 @@ implementation for the given arguments.
            ~(for* ->a ->sh rdim `(~get ~data ~idx)))
          'IReduce
          `(~'-reduce
-          [_# ~f ~init]
-          ~((reduce-init-impls (count rdim)) f init ->a ->sh ->st get data rdim))))))
+           [_# ~f] ~(reduce* false))
+         `(~'-reduce
+           [_# ~f ~init] ~(reduce* true))))))
 
   (defn- do-cast
     [cast body]

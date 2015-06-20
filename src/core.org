@@ -7,6 +7,10 @@
          - [[#supported-type-ids][Supported type IDs]]
          - [[#implementations][Implementations]]
      - [[#ndarray-generator-macro--registry][NDArray generator macro & registry]]
+         - [[#macro-helper-functions][Macro helper functions]]
+         - [[#collreduce--ireduce-implementations][CollReduce / IReduce implementations]]
+         - [[#clojure--clojurscript-protocols][Clojure / Clojurscript protocols]]
+         - [[#main-macro][Main macro]]
      - [[#helper-functions][Helper functions]]
      - [[#complete-namespace-definitions][Complete namespace definitions]]
 
@@ -267,9 +271,15 @@ factory function and registers it in the
 public =ndarray= constructor fn to choose the correct type
 implementation for the given arguments.
 
+*** Macro helper functions
+
 #+BEGIN_SRC clojure :noweb-ref macros
   (defn- type-hinted
     [type x] (if type (with-meta x {:tag (name type)}) x))
+
+  (defn- do-cast
+    [cast body]
+    (if cast `(~cast ~body) body))
 
   (defn- make-symbols
     [id n] (mapv #(symbol (str id %)) (range n)))
@@ -317,7 +327,11 @@ implementation for the given arguments.
   (defn- for*
     [->a ->sh rdim body]
     `(for [~@(mapcat #(vector (->a %) `(range ~(->sh %))) rdim)] ~body))
+#+END_SRC
 
+*** CollReduce / IReduce implementations
+
+#+BEGIN_SRC clojure :noweb-ref macros
   (defn- reduce-1
     [f acc ->p ->sh ->st get data rdim clj? init?]
     (let [x    (->p 0)
@@ -336,7 +350,8 @@ implementation for the given arguments.
              (if (< ~x ~sx)
                (let [~acc (~f ~acc (~get ~data ~idx))]
                  (recur ~acc (unchecked-inc-int ~x) (unchecked-add-int ~idx ~st)))
-               (if (reduced? ~acc) @~acc ~acc)))))))
+               (if (reduced? ~acc)
+                 @~acc ~acc)))))))
 
   (defn- reduce-2
     [f acc ->p ->sh ->st get data rdim clj? init?]
@@ -355,11 +370,18 @@ implementation for the given arguments.
              (if (reduced? ~acc)
                @~acc
                (if (< ~x ~sx)
-                 (recur (~f ~acc (~get ~data ~idx)) ~y (unchecked-inc-int ~x) (unchecked-add-int ~idx ~stx))
+                 (recur (~f ~acc (~get ~data ~idx))
+                        ~y
+                        (unchecked-inc-int ~x)
+                        (unchecked-add-int ~idx ~stx))
                  (if (< ~y sy#)
                    (let [~idx (+ ~'_offset (* ~sty (unchecked-inc-int ~y)))]
-                     (recur (~f ~acc (~get ~data ~idx)) (unchecked-inc-int ~y) 1 (unchecked-add-int ~idx ~stx)))
-                   (if (reduced? ~acc) @~acc ~acc)))))))))
+                     (recur (~f ~acc (~get ~data ~idx))
+                            (unchecked-inc-int ~y)
+                            1
+                            (unchecked-add-int ~idx ~stx)))
+                   (if (reduced? ~acc)
+                     @~acc ~acc)))))))))
 
   (defn- reduce-3
     [f acc ->p ->sh ->st get data rdim clj? init?]
@@ -378,14 +400,27 @@ implementation for the given arguments.
              (if (reduced? ~acc)
                @~acc
                (if (< ~x ~sx)
-                 (recur (~f ~acc (~get ~data ~idx)) ~z ~y (unchecked-inc-int ~x) (unchecked-add-int ~idx ~stx))
+                 (recur (~f ~acc (~get ~data ~idx))
+                        ~z
+                        ~y
+                        (unchecked-inc-int ~x)
+                        (unchecked-add-int ~idx ~stx))
                  (if (< ~y sy#)
                    (let [~idx (+ ~'_offset (+ (* ~stz ~z) (* ~sty (unchecked-inc-int ~y))))]
-                     (recur (~f ~acc (~get ~data ~idx)) ~z (unchecked-inc-int ~y) 1 (unchecked-add-int ~idx ~stx)))
+                     (recur (~f ~acc (~get ~data ~idx))
+                            ~z
+                            (unchecked-inc-int ~y)
+                            1
+                            (unchecked-add-int ~idx ~stx)))
                    (if (< ~z sz#)
                      (let [~idx (+ ~'_offset (* ~stz (unchecked-inc-int ~z)))]
-                       (recur (~f ~acc (~get ~data ~idx)) (unchecked-inc-int ~z) 0 1 (unchecked-add-int ~idx ~stx)))
-                     (if (reduced? ~acc) @~acc ~acc))))))))))
+                       (recur (~f ~acc (~get ~data ~idx))
+                              (unchecked-inc-int ~z)
+                              0
+                              1
+                              (unchecked-add-int ~idx ~stx)))
+                     (if (reduced? ~acc)
+                       @~acc ~acc))))))))))
 
   (defn- reduce-4
     [f acc ->p ->sh ->st get data rdim clj? init?]
@@ -404,18 +439,43 @@ implementation for the given arguments.
              (if (reduced? ~acc)
                @~acc
                (if (< ~x ~sx)
-                 (recur (~f ~acc (~get ~data ~idx)) ~w ~z ~y (unchecked-inc-int ~x) (unchecked-add-int ~idx ~stx))
+                 (recur (~f ~acc (~get ~data ~idx))
+                        ~w
+                        ~z
+                        ~y
+                        (unchecked-inc-int ~x)
+                        (unchecked-add-int ~idx ~stx))
                  (if (< ~y sy#)
                    (let [~idx (+ ~'_offset (+ (* ~stw ~w) (+ (* ~stz ~z) (* ~sty (unchecked-inc-int ~y)))))]
-                     (recur (~f ~acc (~get ~data ~idx)) ~w ~z (unchecked-inc-int ~y) 1 (unchecked-add-int ~idx ~stx)))
+                     (recur (~f ~acc (~get ~data ~idx))
+                            ~w
+                            ~z
+                            (unchecked-inc-int ~y)
+                            1
+                            (unchecked-add-int ~idx ~stx)))
                    (if (< ~z sz#)
                      (let [~idx (+ ~'_offset (+ (* ~stw ~w) (* ~stz (unchecked-inc-int ~z))))]
-                       (recur (~f ~acc (~get ~data ~idx)) ~w (unchecked-inc-int ~z) 0 1 (unchecked-add-int ~idx ~stx)))
+                       (recur (~f ~acc (~get ~data ~idx))
+                              ~w
+                              (unchecked-inc-int ~z)
+                              0
+                              1
+                              (unchecked-add-int ~idx ~stx)))
                      (if (< ~w sw#)
                        (let [~idx (+ ~'_offset (* ~stw (unchecked-inc-int ~w)))]
-                         (recur (~f ~acc (~get ~data ~idx)) (unchecked-inc-int ~w) 0 0 1 (unchecked-add-int ~idx ~stx)))
-                       (if (reduced? ~acc) @~acc ~acc)))))))))))
+                         (recur (~f ~acc (~get ~data ~idx))
+                                (unchecked-inc-int ~w)
+                                0
+                                0
+                                1
+                                (unchecked-add-int ~idx ~stx)))
+                       (if (reduced? ~acc)
+                         @~acc ~acc)))))))))))
+#+END_SRC
 
+*** Clojure / Clojurscript protocols
+
+#+BEGIN_SRC clojure :noweb-ref macros
   (def ^:private reduce-impls
     [nil reduce-1 reduce-2 reduce-3 reduce-4])
 
@@ -445,11 +505,11 @@ implementation for the given arguments.
            [_# ~f] ~(reduce* false))
          `(~'-reduce
            [_# ~f ~init] ~(reduce* true))))))
+#+END_SRC
 
-  (defn- do-cast
-    [cast body]
-    (if cast `(~cast ~body) body))
+*** Main macro
 
+#+BEGIN_SRC clojure :noweb-ref macros
   (defmacro def-ndarray
     [dim cast type-hint type-id data-ctor get set & [clj?]]
     (let [type-name (symbol (str "NDArray" dim (name type-id)))

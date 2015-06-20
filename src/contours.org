@@ -62,7 +62,7 @@ the resulting visualizations.
    '[thi.ng.geom.svg.core :as svg]
    '[thi.ng.math.core :as m]
    '[thi.ng.math.simplexnoise :as n]
-   '[thi.ng.color.core :as col])
+   '[thi.ng.color.gradients :as grad])
 
   (def res 128)
   (def width 640.0)
@@ -70,16 +70,6 @@ the resulting visualizations.
   (def clipped (- width (* 2.0 scale)))
   (def n-scale 0.03)
   (def num-contours 60)
-
-  (defn make-palette
-    "Cosine based RGB palette generation method by iq: http://v.gd/B2aySt"
-    [a b c d n]
-    (mapv
-     #(mapv
-       (fn [a b c d]
-         (+ a (* b (Math/cos (* m/TWO_PI (+ (* c %) d))))))
-       a b c d)
-     (m/norm-range n)))
 
   (defn contour->svg
     "Takes a single seq of contour coordinates and converts it into an
@@ -118,11 +108,7 @@ the resulting visualizations.
       (contours/set-border-2d mat 1)))
 
   (def palette
-    (make-palette
-     [0.5 0.5 0.5] [0.5 0.5 0.5] [1.0 1.0 1.0] [0 0.1 0.2]
-     ;;[0.5 0.5 0.5] [0.5 0.5 0.5] [1.0 1.0 1.0] [0 1/3 2/3]
-     ;;[0.5 0.5 0.5] [0.5 0.5 0.5] [1.0 1.0 0.5] [0.8 0.9 0.3]
-     num-contours))
+    (apply grad/cosine-gradient num-contours (:orange-blue grad/cosine-schemes)))
 
   ;; choose one...
   (def mat (noise-matrix res n-scale))
@@ -132,7 +118,7 @@ the resulting visualizations.
        (rest)
        (map
         #(svg/group
-          {:stroke (col/rgba->css (palette (int (* % (dec num-contours)))))
+          {:stroke (palette (int (* % (dec num-contours))))
            :fill "none"}
           (map contour->svg (contours/find-contours-2d mat %))))
        (svg/svg

@@ -183,7 +183,7 @@ Loosely based on Marching Squares/Cubes implementations by Paul Bourke (C) & Mur
 
   (defn encode-crossings-2d
     [src isoval]
-    (let [out  (nd/ndarray :int8 (byte-array (nd/size src)) (nd/shape src))
+    (let [out  (nd/ndarray :int8 (#?(:clj byte-array :cljs a/int8) (nd/size src)) (nd/shape src))
           iso? (fn [y x m] (if (< (nd/get-at src y x) isoval) m 0))]
       (loop [pos (nd/position-seq (nd/truncate-h src -1 -1))]
         (if pos
@@ -397,7 +397,8 @@ the functions below.
 #+BEGIN_SRC clojure :tangle ../babel/src/thi/ng/ndarray/contours.cljc :noweb yes :mkdirp yes :padline no
   (ns thi.ng.ndarray.contours
     (:require
-     [thi.ng.ndarray.core :as nd]))
+     [thi.ng.ndarray.core :as nd]
+     #?(:cljs [thi.ng.typedarrays.core :as a])))
 
   <<level-crossings>>
 

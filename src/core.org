@@ -319,16 +319,18 @@ implementation for the given arguments.
     `(for [~@(mapcat #(vector (->a %) `(range ~(->sh %))) rdim)] ~body))
 
   (defn- reduce-1
-    [f acc ->p ->sh ->st get data rdim init?]
-    (let [x   (->p 0)
-          sx  (->sh 0)
-          st  (->st 0)
-          idx (gensym)]
+    [f acc ->p ->sh ->st get data rdim clj? init?]
+    (let [x    (->p 0)
+          sx   (->sh 0)
+          st   (->st 0)
+          idx  (gensym)
+          acc0 `(~get ~data ~'_offset)
+          acc0 (if clj? `(num ~acc0) acc0)]
       `(if (zero? ~sx)
          ~(if init? nil `(~f))
          (loop ~(if init?
                   [acc acc x 0 idx '_offset]
-                  [acc `(num (~get ~data ~'_offset)) x 1 idx `(unchecked-add-int ~'_offset ~st)])
+                  [acc acc0 x 1 idx `(unchecked-add-int ~'_offset ~st)])
            (if (reduced? ~acc)
              @~acc
              (if (< ~x ~sx)
@@ -337,17 +339,19 @@ implementation for the given arguments.
                (if (reduced? ~acc) @~acc ~acc)))))))
 
   (defn- reduce-2
-    [f acc ->p ->sh ->st get data rdim init?]
+    [f acc ->p ->sh ->st get data rdim clj? init?]
     (let [[y x]     (map ->p rdim)
           [sy sx]   (map ->sh rdim)
           [sty stx] (map ->st rdim)
-          idx       (gensym)]
+          idx       (gensym)
+          acc0      `(~get ~data ~'_offset)
+          acc0      (if clj? `(num ~acc0) acc0)]
       `(if (zero? (* ~sy ~sx))
          ~(if init? acc `(~f))
          (let [sy# (dec ~sy)]
            (loop ~(if init?
                     [acc acc y 0 x 0 idx '_offset]
-                    [acc `(num (~get ~data ~'_offset)) y 0 x 1 idx `(unchecked-add-int ~'_offset ~stx)])
+                    [acc acc0 y 0 x 1 idx `(unchecked-add-int ~'_offset ~stx)])
              (if (reduced? ~acc)
                @~acc
                (if (< ~x ~sx)
@@ -358,17 +362,19 @@ implementation for the given arguments.
                    (if (reduced? ~acc) @~acc ~acc)))))))))
 
   (defn- reduce-3
-    [f acc ->p ->sh ->st get data rdim init?]
+    [f acc ->p ->sh ->st get data rdim clj? init?]
     (let [[z y x]       (map ->p rdim)
           [sz sy sx]    (map ->sh rdim)
           [stz sty stx] (map ->st rdim)
-          idx           (gensym)]
+          idx           (gensym)
+          acc0          `(~get ~data ~'_offset)
+          acc0          (if clj? `(num ~acc0) acc0)]
       `(if (zero? (* (* ~sz ~sy) ~sx))
          ~(if init? acc `(~f))
          (let [sz# (dec ~sz) sy# (dec ~sy)]
            (loop ~(if init?
                     [acc acc z 0 y 0 x 0 idx '_offset]
-                    [acc `(num (~get ~data ~'_offset)) z 0 y 0 x 1 idx `(unchecked-add-int ~'_offset ~stx)])
+                    [acc acc0 z 0 y 0 x 1 idx `(unchecked-add-int ~'_offset ~stx)])
              (if (reduced? ~acc)
                @~acc
                (if (< ~x ~sx)
@@ -382,17 +388,19 @@ implementation for the given arguments.
                      (if (reduced? ~acc) @~acc ~acc))))))))))
 
   (defn- reduce-4
-    [f acc ->p ->sh ->st get data rdim init?]
+    [f acc ->p ->sh ->st get data rdim clj? init?]
     (let [[w z y x]         (map ->p rdim)
           [sw sz sy sx]     (map ->sh rdim)
           [stw stz sty stx] (map ->st rdim)
-          idx               (gensym)]
+          idx               (gensym)
+          acc0              `(~get ~data ~'_offset)
+          acc0              (if clj? `(num ~acc0) acc0)]
       `(if (zero? (* (* (* ~sw ~sz) ~sy) ~sx))
          ~(if init? acc `(~f))
          (let [sw# (dec ~sw) sz# (dec ~sz) sy# (dec ~sy)]
            (loop ~(if init?
                     [acc acc w 0 z 0 y 0 x 0 idx '_offset]
-                    [acc `(num (~get ~data ~'_offset)) w 0 z 0 y 0 x 1 idx `(unchecked-add-int ~'_offset ~stx)])
+                    [acc acc0 w 0 z 0 y 0 x 1 idx `(unchecked-add-int ~'_offset ~stx)])
              (if (reduced? ~acc)
                @~acc
                (if (< ~x ~sx)
@@ -415,7 +423,7 @@ implementation for the given arguments.
     [clj? get data ->a ->sh ->st idx rdim]
     (let [[f init] (repeatedly gensym)
           r-impl   (reduce-impls (count rdim))
-          reduce*  (partial r-impl f init ->a ->sh ->st get data rdim)]
+          reduce*  (partial r-impl f init ->a ->sh ->st get data rdim clj?)]
       (if clj?
         (list
          'clojure.lang.Seqable

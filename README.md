@@ -15,5 +15,5 @@ Please see [index.org](src/index.org) for further information & examples.
 ## Current Leiningen coordinates
 
 ```clj
-[thi.ng/ndarray "0.3.0"]
+[thi.ng/ndarray "0.3.1"]
 ```

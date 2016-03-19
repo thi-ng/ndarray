@@ -163,7 +163,7 @@ availability in Clojure & Clojurescript.
 
   #?(:clj
      (do
-       (def-ndarray 1 nil     nil        :generic to-array aget aset true)
+       (def-ndarray 1 nil     "objects"  :generic to-array aget aset true)
        (def-ndarray 1 boolean "booleans" :boolean boolean-array aget aset true)
        (def-ndarray 1 byte    "bytes"    :int8    byte-array aget aset true)
        (def-ndarray 1 short   "shorts"   :int16   short-array aget aset true)
@@ -172,7 +172,7 @@ availability in Clojure & Clojurescript.
        (def-ndarray 1 float   "floats"   :float32 float-array aget aset true)
        (def-ndarray 1 double  "doubles"  :float64 double-array aget aset true)
 
-       (def-ndarray 2 nil     nil        :generic to-array aget aset true)
+       (def-ndarray 2 nil     "objects"  :generic to-array aget aset true)
        (def-ndarray 2 boolean "booleans" :boolean boolean-array aget aset true)
        (def-ndarray 2 byte    "bytes"    :int8    byte-array aget aset true)
        (def-ndarray 2 short   "shorts"   :int16   short-array aget aset true)
@@ -181,7 +181,7 @@ availability in Clojure & Clojurescript.
        (def-ndarray 2 float   "floats"   :float32 float-array aget aset true)
        (def-ndarray 2 double  "doubles"  :float64 double-array aget aset true)
 
-       (def-ndarray 3 nil     nil        :generic to-array aget aset true)
+       (def-ndarray 3 nil     "objects"  :generic to-array aget aset true)
        (def-ndarray 3 boolean "booleans" :boolean boolean-array aget aset true)
        (def-ndarray 3 byte    "bytes"    :int8    byte-array aget aset true)
        (def-ndarray 3 short   "shorts"   :int16   short-array aget aset true)
@@ -190,15 +190,14 @@ availability in Clojure & Clojurescript.
        (def-ndarray 3 float   "floats"   :float32 float-array aget aset true)
        (def-ndarray 3 double  "doubles"  :float64 double-array aget aset true)
 
-       (def-ndarray 4 nil     nil        :generic to-array aget aset true)
+       (def-ndarray 4 nil     "objects"  :generic to-array aget aset true)
        (def-ndarray 4 boolean "booleans" :boolean boolean-array aget aset true)
        (def-ndarray 4 byte    "bytes"    :int8    byte-array aget aset true)
        (def-ndarray 4 short   "shorts"   :int16   short-array aget aset true)
        (def-ndarray 4 int     "ints"     :int32   int-array aget aset true)
        (def-ndarray 4 long    "longs"    :int64   long-array aget aset true)
        (def-ndarray 4 float   "floats"   :float32 float-array aget aset true)
-       (def-ndarray 4 double  "doubles"  :float64 double-array aget aset true)
-       )
+       (def-ndarray 4 double  "doubles"  :float64 double-array aget aset true))
      :cljs
      (do
        (def-ndarray 1 nil nil :generic to-array aget aset false)
@@ -339,138 +338,186 @@ implementation for the given arguments.
           st   (->st 0)
           idx  (gensym)
           acc0 `(~get ~data ~'_offset)
-          acc0 (if clj? `(num ~acc0) acc0)]
-      `(if (zero? ~sx)
-         ~(if init? nil `(~f))
-         (loop ~(if init?
-                  [acc acc x 0 idx '_offset]
-                  [acc acc0 x 1 idx `(unchecked-add-int ~'_offset ~st)])
-           (if (reduced? ~acc)
-             @~acc
-             (if (< ~x ~sx)
-               (let [~acc (~f ~acc (~get ~data ~idx))]
-                 (recur ~acc (unchecked-inc-int ~x) (unchecked-add-int ~idx ~st)))
-               (if (reduced? ~acc)
-                 @~acc ~acc)))))))
+          body `(if (reduced? ~acc)
+                  @~acc
+                  (if (< ~x ~sx)
+                    (recur (~f ~acc (~get ~data ~idx)) (unchecked-inc-int ~x) (unchecked-add-int ~idx ~st))
+                    (if (reduced? ~acc)
+                      @~acc ~acc)))]
+      (if init?
+        `(if (zero? ~sx)
+           ~acc
+           (if (== 1 ~sx)
+             (~f ~acc ~acc0)
+             (loop [~acc ~acc ~x 0 ~idx ~'_offset]
+               ~body)))
+        `(if (zero? ~sx)
+           (~f)
+           (if (== 1 ~sx)
+             ~acc0
+             (loop [~acc (~f ~acc0 (~get ~data (unchecked-add-int ~'_offset ~st)))
+                    ~x   2
+                    ~idx (unchecked-add-int ~'_offset (bit-shift-left ~st 1))]
+               ~body))))))
 
   (defn- reduce-2
     [f acc ->p ->sh ->st get data rdim clj? init?]
     (let [[y x]     (map ->p rdim)
           [sy sx]   (map ->sh rdim)
           [sty stx] (map ->st rdim)
-          idx       (gensym)
+          [idx sy'] (repeatedly 2 gensym)
           acc0      `(~get ~data ~'_offset)
-          acc0      (if clj? `(num ~acc0) acc0)]
-      `(if (zero? (* ~sy ~sx))
-         ~(if init? acc `(~f))
-         (let [sy# (dec ~sy)]
-           (loop ~(if init?
-                    [acc acc y 0 x 0 idx '_offset]
-                    [acc acc0 y 0 x 1 idx `(unchecked-add-int ~'_offset ~stx)])
-             (if (reduced? ~acc)
-               @~acc
-               (if (< ~x ~sx)
-                 (recur (~f ~acc (~get ~data ~idx))
-                        ~y
-                        (unchecked-inc-int ~x)
-                        (unchecked-add-int ~idx ~stx))
-                 (if (< ~y sy#)
-                   (let [~idx (+ ~'_offset (* ~sty (unchecked-inc-int ~y)))]
-                     (recur (~f ~acc (~get ~data ~idx))
-                            (unchecked-inc-int ~y)
-                            1
-                            (unchecked-add-int ~idx ~stx)))
-                   (if (reduced? ~acc)
-                     @~acc ~acc)))))))))
+          body      `(if (reduced? ~acc)
+                       @~acc
+                       (if (< ~x ~sx)
+                         (recur (~f ~acc (~get ~data ~idx))
+                                ~y
+                                (unchecked-inc-int ~x)
+                                (unchecked-add-int ~idx ~stx))
+                         (if (< ~y ~sy')
+                           (let [~idx (unchecked-add-int
+                                       ~'_offset
+                                       (unchecked-multiply-int ~sty (unchecked-inc-int ~y)))]
+                             (recur (~f ~acc (~get ~data ~idx))
+                                    (unchecked-inc-int ~y)
+                                    1
+                                    (unchecked-add-int ~idx ~stx)))
+                           (if (reduced? ~acc)
+                             @~acc ~acc))))]
+      (if init?
+        `(if (zero? (* ~sy ~sx))
+           ~acc
+           (if (== 1 (* ~sy ~sx))
+             (~f ~acc ~acc0)
+             (let [~sy' (dec ~sy)]
+               (loop [~acc ~acc ~y 0 ~x 0 ~idx ~'_offset]
+                 ~body))))
+        `(if (zero? (* ~sy ~sx))
+           (~f)
+           (if (== 1 (* ~sy ~sx))
+             ~acc0
+             (let [~sy' (dec ~sy)]
+               (loop [~acc (~f ~acc0 (~get ~data (unchecked-add-int ~'_offset ~stx)))
+                      ~y   0
+                      ~x   2
+                      ~idx (unchecked-add-int ~'_offset (bit-shift-left ~stx 1))]
+                 ~body)))))))
 
   (defn- reduce-3
     [f acc ->p ->sh ->st get data rdim clj? init?]
     (let [[z y x]       (map ->p rdim)
           [sz sy sx]    (map ->sh rdim)
           [stz sty stx] (map ->st rdim)
-          idx           (gensym)
+          [idx sz' sy'] (repeatedly 3 gensym)
           acc0          `(~get ~data ~'_offset)
-          acc0          (if clj? `(num ~acc0) acc0)]
-      `(if (zero? (* (* ~sz ~sy) ~sx))
-         ~(if init? acc `(~f))
-         (let [sz# (dec ~sz) sy# (dec ~sy)]
-           (loop ~(if init?
-                    [acc acc z 0 y 0 x 0 idx '_offset]
-                    [acc acc0 z 0 y 0 x 1 idx `(unchecked-add-int ~'_offset ~stx)])
-             (if (reduced? ~acc)
-               @~acc
-               (if (< ~x ~sx)
-                 (recur (~f ~acc (~get ~data ~idx))
-                        ~z
-                        ~y
-                        (unchecked-inc-int ~x)
-                        (unchecked-add-int ~idx ~stx))
-                 (if (< ~y sy#)
-                   (let [~idx (+ ~'_offset (+ (* ~stz ~z) (* ~sty (unchecked-inc-int ~y))))]
-                     (recur (~f ~acc (~get ~data ~idx))
-                            ~z
-                            (unchecked-inc-int ~y)
-                            1
-                            (unchecked-add-int ~idx ~stx)))
-                   (if (< ~z sz#)
-                     (let [~idx (+ ~'_offset (* ~stz (unchecked-inc-int ~z)))]
-                       (recur (~f ~acc (~get ~data ~idx))
-                              (unchecked-inc-int ~z)
-                              0
-                              1
-                              (unchecked-add-int ~idx ~stx)))
-                     (if (reduced? ~acc)
-                       @~acc ~acc))))))))))
+          body          `(if (reduced? ~acc)
+                           @~acc
+                           (if (< ~x ~sx)
+                             (recur (~f ~acc (~get ~data ~idx))
+                                    ~z
+                                    ~y
+                                    (unchecked-inc-int ~x)
+                                    (unchecked-add-int ~idx ~stx))
+                             (if (< ~y ~sy')
+                               (let [~idx (+ ~'_offset (+ (* ~stz ~z) (* ~sty (unchecked-inc-int ~y))))]
+                                 (recur (~f ~acc (~get ~data ~idx))
+                                        ~z
+                                        (unchecked-inc-int ~y)
+                                        1
+                                        (unchecked-add-int ~idx ~stx)))
+                               (if (< ~z ~sz')
+                                 (let [~idx (+ ~'_offset (* ~stz (unchecked-inc-int ~z)))]
+                                   (recur (~f ~acc (~get ~data ~idx))
+                                          (unchecked-inc-int ~z)
+                                          0
+                                          1
+                                          (unchecked-add-int ~idx ~stx)))
+                                 (if (reduced? ~acc)
+                                   @~acc ~acc)))))]
+      (if init?
+        `(if (zero? (* (* ~sz ~sy) ~sx))
+           ~acc
+           (if (== 1 (* (* ~sz ~sy) ~sx))
+             (~f ~acc ~acc0)
+             (let [~sz' (dec ~sz) ~sy' (dec ~sy)]
+               (loop [~acc ~acc ~z 0 ~y 0 ~x 0 ~idx ~'_offset]
+                 ~body))))
+        `(if (zero? (* (* ~sz ~sy) ~sx))
+           (~f)
+           (if (== 1 (* (* ~sz ~sy) ~sx))
+             ~acc0
+             (let [~sz' (dec ~sz) ~sy' (dec ~sy)]
+               (loop [~acc (~f ~acc0 (~get ~data (unchecked-add-int ~'_offset ~stx)))
+                      ~z   0
+                      ~y   0
+                      ~x   2
+                      ~idx (unchecked-add-int ~'_offset (bit-shift-left ~stx 1))]
+                 ~body)))))))
 
   (defn- reduce-4
     [f acc ->p ->sh ->st get data rdim clj? init?]
     (let [[w z y x]         (map ->p rdim)
           [sw sz sy sx]     (map ->sh rdim)
           [stw stz sty stx] (map ->st rdim)
-          idx               (gensym)
+          [idx sw' sz' sy'] (repeatedly 4 gensym)
           acc0              `(~get ~data ~'_offset)
-          acc0              (if clj? `(num ~acc0) acc0)]
-      `(if (zero? (* (* (* ~sw ~sz) ~sy) ~sx))
-         ~(if init? acc `(~f))
-         (let [sw# (dec ~sw) sz# (dec ~sz) sy# (dec ~sy)]
-           (loop ~(if init?
-                    [acc acc w 0 z 0 y 0 x 0 idx '_offset]
-                    [acc acc0 w 0 z 0 y 0 x 1 idx `(unchecked-add-int ~'_offset ~stx)])
-             (if (reduced? ~acc)
-               @~acc
-               (if (< ~x ~sx)
-                 (recur (~f ~acc (~get ~data ~idx))
-                        ~w
-                        ~z
-                        ~y
-                        (unchecked-inc-int ~x)
-                        (unchecked-add-int ~idx ~stx))
-                 (if (< ~y sy#)
-                   (let [~idx (+ ~'_offset (+ (* ~stw ~w) (+ (* ~stz ~z) (* ~sty (unchecked-inc-int ~y)))))]
-                     (recur (~f ~acc (~get ~data ~idx))
-                            ~w
-                            ~z
-                            (unchecked-inc-int ~y)
-                            1
-                            (unchecked-add-int ~idx ~stx)))
-                   (if (< ~z sz#)
-                     (let [~idx (+ ~'_offset (+ (* ~stw ~w) (* ~stz (unchecked-inc-int ~z))))]
-                       (recur (~f ~acc (~get ~data ~idx))
-                              ~w
-                              (unchecked-inc-int ~z)
-                              0
-                              1
-                              (unchecked-add-int ~idx ~stx)))
-                     (if (< ~w sw#)
-                       (let [~idx (+ ~'_offset (* ~stw (unchecked-inc-int ~w)))]
-                         (recur (~f ~acc (~get ~data ~idx))
-                                (unchecked-inc-int ~w)
-                                0
-                                0
-                                1
-                                (unchecked-add-int ~idx ~stx)))
-                       (if (reduced? ~acc)
-                         @~acc ~acc)))))))))))
+          body              `(if (reduced? ~acc)
+                               @~acc
+                               (if (< ~x ~sx)
+                                 (recur (~f ~acc (~get ~data ~idx))
+                                        ~w
+                                        ~z
+                                        ~y
+                                        (unchecked-inc-int ~x)
+                                        (unchecked-add-int ~idx ~stx))
+                                 (if (< ~y ~sy')
+                                   (let [~idx (+ ~'_offset
+                                                 (+ (* ~stw ~w)
+                                                    (+ (* ~stz ~z) (* ~sty (unchecked-inc-int ~y)))))]
+                                     (recur (~f ~acc (~get ~data ~idx))
+                                            ~w
+                                            ~z
+                                            (unchecked-inc-int ~y)
+                                            1
+                                            (unchecked-add-int ~idx ~stx)))
+                                   (if (< ~z ~sz')
+                                     (let [~idx (+ ~'_offset (+ (* ~stw ~w) (* ~stz (unchecked-inc-int ~z))))]
+                                       (recur (~f ~acc (~get ~data ~idx))
+                                              ~w
+                                              (unchecked-inc-int ~z)
+                                              0
+                                              1
+                                              (unchecked-add-int ~idx ~stx)))
+                                     (if (< ~w ~sw')
+                                       (let [~idx (+ ~'_offset (* ~stw (unchecked-inc-int ~w)))]
+                                         (recur (~f ~acc (~get ~data ~idx))
+                                                (unchecked-inc-int ~w)
+                                                0
+                                                0
+                                                1
+                                                (unchecked-add-int ~idx ~stx)))
+                                       (if (reduced? ~acc)
+                                         @~acc ~acc))))))]
+      (if init?
+        `(if (zero? (* (* (* ~sw ~sz) ~sy) ~sx))
+           ~acc
+           (if (== 1 (* (* (* ~sw ~sz) ~sy) ~sx))
+             (~f ~acc ~acc0)
+             (let [~sw' (dec ~sw) ~sz' (dec ~sz) ~sy' (dec ~sy)]
+               (loop [~acc ~acc ~w 0 ~z 0 ~y 0 ~x 0 ~idx ~'_offset]
+                 ~body))))
+        `(if (zero? (* (* (* ~sw ~sz) ~sy) ~sx))
+           (~f)
+           (if (== 1 (* (* (* ~sw ~sz) ~sy) ~sx))
+             ~acc0
+             (let [~sw' (dec ~sw) ~sz' (dec ~sz) ~sy' (dec ~sy)]
+               (loop [~acc (~f ~acc0 (~get ~data (unchecked-add-int ~'_offset ~stx)))
+                      ~w   0
+                      ~z   0
+                      ~y   0
+                      ~x   2
+                      ~idx (unchecked-add-int ~'_offset (bit-shift-left ~stx 1))]
+                 ~body)))))))
 #+END_SRC
 
 *** Clojure / Clojurscript protocols

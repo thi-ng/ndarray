@@ -191,7 +191,7 @@ A slightly larger example to demonstrate connected component queries on a graph:
 ** Injected properties                                             :noexport:
 
 #+BEGIN_SRC clojure :noweb-ref version
-0.3.1
+0.3.2
 #+END_SRC
 
 #+BEGIN_SRC clojure :exports none :noweb-ref project-url
@@ -218,7 +218,7 @@ target/ndarray-<<version>>.js
 #+END_SRC
 **** [[http://thi.ng/math][thi.ng/math]]
 #+BEGIN_SRC clojure :noweb-ref dep-math
-[thi.ng/math "0.1.4"]
+[thi.ng/math "0.2.0"]
 #+END_SRC
 *** Development
 **** [[https://github.com/cemerick/clojurescript.test][clojurescript.test]]
@@ -242,7 +242,7 @@ target/ndarray-<<version>>.js
 ** Leiningen coordinates
 
 #+BEGIN_SRC clojure :noweb yes :noweb-ref lein-coords
-  [thi.ng/ndarray "0.2.0-SNAPSHOT"]
+  [thi.ng/ndarray "0.3.2"]
 #+END_SRC
 
 ** Building this project
